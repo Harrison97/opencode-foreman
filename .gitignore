@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.jev/
+.env
+.env.*
+artifacts/
+research/
+BENCHMARK-*.md

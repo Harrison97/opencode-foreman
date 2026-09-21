@@ -1,0 +1,34 @@
+{
+  "name": "opencode-jev-supervisor",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "description": "Durable professional workflow supervision for OpenCode with Jev Choice",
+  "exports": {
+    ".": "./dist/opencode/plugin.js"
+  },
+  "scripts": {
+    "build": "node scripts/clean-build.mjs && tsc -p tsconfig.json && node scripts/copy-workflows.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test tests/*.test.ts",
+    "check": "npm run typecheck && npm test",
+    "install:local": "npm run build && node scripts/install.mjs",
+    "usage:jev": "tsx scripts/jev-usage.ts",
+    "workflow:check": "tsx scripts/check-workflow.ts",
+    "smoke:jev": "tsx scripts/smoke-jev.ts",
+    "smoke:opencode": "tsx scripts/smoke-opencode.ts"
+  },
+  "dependencies": {
+    "@opencode-ai/plugin": "1.18.30",
+    "ajv": "^8.20.0",
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
