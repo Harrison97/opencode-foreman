@@ -16,8 +16,6 @@ A review can return work for repair or investigation instead of following a fixe
   or another task, with the outputs and transitions you want.
 - **Use different models for different work.** Assign models per capability—for
   example, architecture and implementation—without manually switching at each step.
-- **Continue work across sessions.** Keep decisions, outputs, and progress on disk,
-  with human questions and recovery recorded as resumable pauses.
 
 ## Install
 
@@ -43,11 +41,7 @@ configuration, disabling, and recovery.
 
 ## Start a project
 
-Open OpenCode in the project you want to work on:
-
-```sh
-mkdir my-project && cd my-project && opencode
-```
+Open OpenCode in the project you want to work on.
 
 Ask normally:
 
@@ -77,10 +71,10 @@ These are chat messages/UI commands, not shell commands. The agent uses
 
 Foreman supports one project configuration: **`foreman.workflow.yaml`**, in the
 directory where OpenCode starts. There is no home-directory workflow discovery.
-Copy the default to customize it, or write your own:
+Download the default to customize it, or write your own:
 
 ```sh
-cp /path/to/foreman/src/workflows/software-engineer/workflow.yaml ./foreman.workflow.yaml
+curl --fail --location --output foreman.workflow.yaml https://raw.githubusercontent.com/Harrison97/opencode-foreman/refs/heads/main/src/workflows/software-engineer/workflow.yaml
 ```
 
 A minimal complete workflow:
@@ -128,16 +122,6 @@ existing campaigns retain their saved workflow. State and Jev usage live in
 `.foreman/`. Never put credentials there.
 
 ## What Foreman guarantees
-
-The runtime checks output schemas, file gates, permitted transitions, dependencies,
-tool-name restrictions, and fresh command evidence where configured. It does not
-prove that tests cover the intended behavior. Campaign planning and meaningful
-acceptance checks still depend on the agent and workflow instructions.
-
-The runtime work-unit cap is unlimited by default; `FOREMAN_MAX_TURNS` opts into
-a cap. The default engineering workflow also instructs the agent to observe
-[per-box recovery and time limits](docs/foreman.md). Set `FOREMAN_DISABLED=1` to
-disable Foreman. No default dollar budget is imposed.
 
 Jev chooses the highest-ranked legal option. Transient routing failures retry,
 then pause visibly; credentials errors pause immediately. Usage is available with
