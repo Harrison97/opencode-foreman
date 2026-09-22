@@ -2,12 +2,14 @@ export interface ModelRef {
   providerID: string;
   modelID: string;
 }
+
 export interface Decision {
   choice: string;
   confidence: number;
   probabilities: Record<string, number>;
   model?: string;
 }
+
 export interface Chooser {
   choose(
     state: unknown,
@@ -16,7 +18,9 @@ export interface Chooser {
     context?: { sessionID: string; signal?: AbortSignal },
   ): Promise<Decision>;
 }
+
 export type Outcome = "ready" | "incomplete" | "blocked";
+
 export interface Capability {
   purpose: string;
   instructions: string;
@@ -30,12 +34,14 @@ export interface Capability {
   next?: Partial<Record<Outcome, string[]>>;
   terminal?: boolean;
 }
+
 export interface Workflow {
   version: 1;
   name: string;
   admission: { instructions: string; entries: string[] };
   capabilities: Record<string, Capability>;
 }
+
 export interface Report {
   summary: string;
   outcome: Outcome;
@@ -43,6 +49,7 @@ export interface Report {
   covered?: string[];
   questions?: string[];
 }
+
 export interface Evidence {
   callID: string;
   command: string;
@@ -52,6 +59,7 @@ export interface Evidence {
   revision: number;
   epoch: number;
 }
+
 export interface Transition {
   from: string | null;
   to: string;
@@ -61,12 +69,14 @@ export interface Transition {
   probabilities?: Record<string, number>;
   reason: string;
 }
+
 export interface Delivery {
   id: string;
   text: string;
   terminal: boolean;
   lease?: { owner: string; pid: number; expiresAt: number };
 }
+
 export interface DecisionRequest {
   id: string;
   gate: "admission" | "transition";
@@ -75,17 +85,20 @@ export interface DecisionRequest {
   inputMessageID?: string;
   lease?: { owner: string; pid: number; expiresAt: number };
 }
+
 export type ActivePhase =
   | { kind: "working"; inputMessageID?: string }
   | { kind: "reported"; report: Report; inputMessageID?: string }
   | { kind: "deciding"; request: DecisionRequest }
   | { kind: "dispatching"; delivery: Delivery }
   | { kind: "delivering"; delivery: Delivery };
+
 export type Phase =
   | ActivePhase
   | { kind: "paused"; reason: string; questions: string[]; resume: ActivePhase }
   | { kind: "complete"; messageID: string }
   | { kind: "bypassed" };
+
 export interface WorkflowState {
   schema: 3;
   id: string;
@@ -120,6 +133,7 @@ export interface WorkflowState {
     at: string;
   }[];
 }
+
 // Read-only presentation fields are derived, never stored as a second source of truth.
 export type WorkflowView = WorkflowState & {
   status: "running" | "paused" | "delivering" | "complete" | "bypassed";
@@ -129,13 +143,16 @@ export type WorkflowView = WorkflowState & {
   pendingDecision?: "admission" | "transition";
   pending?: Delivery & { delivered: boolean };
 };
+
 export interface Database {
   schema: 3;
   active?: string;
   workflows: Record<string, WorkflowState>;
 }
+
 export function viewState(s: WorkflowState): WorkflowView {
   const p = s.phase.kind === "paused" ? s.phase.resume : s.phase;
+
   return {
     ...s,
     status:

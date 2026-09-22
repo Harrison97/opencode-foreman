@@ -2,6 +2,7 @@
 // No secret values or environment variable listings are emitted.
 export function redact(text: string): string {
   let safe = text;
+
   for (const [name, value] of Object.entries(process.env)) {
     if (
       value &&
@@ -10,6 +11,7 @@ export function redact(text: string): string {
     )
       safe = safe.split(value).join("[REDACTED]");
   }
+
   return safe
     .replace(/\bBearer\s+[\w.\-+/=]+/gi, "Bearer [REDACTED]")
     .replace(
@@ -17,6 +19,7 @@ export function redact(text: string): string {
       "[REDACTED]",
     );
 }
+
 export function sanitize<T>(value: T): T {
   return JSON.parse(redact(JSON.stringify(value))) as T;
 }

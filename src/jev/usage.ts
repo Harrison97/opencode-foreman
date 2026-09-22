@@ -42,9 +42,11 @@ export function tokenCount(value: unknown): number | null {
 // recording accounting data must not recursively acquire that transaction's lock.
 export class UsageLog {
   readonly path: string;
+
   constructor(readonly root: string) {
     this.path = join(root, ".jev", "usage.jsonl");
   }
+
   async append(record: JevUsage): Promise<void> {
     const dir = join(this.root, ".jev");
     await mkdir(dir, { recursive: true, mode: 0o700 });
@@ -56,20 +58,26 @@ export class UsageLog {
     });
     await chmod(this.path, 0o600);
   }
+
   async read(): Promise<{ records: JevUsage[]; unreadableLines: number }> {
     let text: string;
+
     try {
       text = await readFile(this.path, "utf8");
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code === "ENOENT")
         return { records: [], unreadableLines: 0 };
+
       throw e;
     }
+
     const records: JevUsage[] = [];
     let unreadableLines = 0;
+
     for (const line of text.split("\n").filter(Boolean)) {
       try {
         const value = JSON.parse(line) as JevUsage;
+
         if (
           value.schema !== 1 ||
           typeof value.requestID !== "string" ||
@@ -82,18 +90,22 @@ export class UsageLog {
           ].includes(value.status)
         )
           throw new Error("Invalid usage record");
+
         records.push(value);
       } catch {
         unreadableLines++;
       }
     }
+
     return { records, unreadableLines };
   }
 }
 
 export function summarizeUsage(records: JevUsage[]) {
   const latest = new Map<string, JevUsage>();
+
   for (const record of records) latest.set(record.requestID, record);
+
   const requests = [...latest.values()];
   const totals = (items: JevUsage[]) => ({
     requests: items.length,
@@ -132,5 +144,6 @@ export function summarizeUsage(records: JevUsage[]) {
       ...totals(requests.filter((r) => r.sessionID === sessionID)),
     }),
   );
+
   return { ...totals(requests), models, sessions };
 }

@@ -3,12 +3,14 @@ import { DecisionError, highestDecision } from "../core/runtime/decision.js";
 import { sanitize } from "../core/security.js";
 import { randomUUID } from "node:crypto";
 import { tokenCount, type JevUsage } from "./usage.js";
+
 export function parseDecision(payload: unknown, legal: string[]): Decision {
   const obj = payload as {
     model?: string;
     answers?: { next?: Partial<Decision> & { type?: string } };
   };
   const answer = obj?.answers?.next;
+
   if (
     !answer ||
     answer.type !== "choice" ||
@@ -21,6 +23,7 @@ export function parseDecision(payload: unknown, legal: string[]): Decision {
     typeof answer.probabilities !== "object"
   )
     throw new DecisionError("Invalid Jev Choice response");
+
   return highestDecision(
     {
       choice: answer.choice!,
@@ -31,6 +34,7 @@ export function parseDecision(payload: unknown, legal: string[]): Decision {
     legal,
   );
 }
+
 export class JevClient implements Chooser {
   constructor(
     private options: {
@@ -46,9 +50,11 @@ export class JevClient implements Chooser {
       }) => Promise<void>;
     } = {},
   ) {}
+
   private async notice(type: "retry" | "connected", message: string) {
     await this.options.onNotice?.({ type, message }).catch(() => {});
   }
+
   async choose(
     state: unknown,
     criteria: Record<string, string>,
@@ -60,10 +66,12 @@ export class JevClient implements Chooser {
       this.options.key ??
       process.env.JEV_API_KEY ??
       process.env.TYPESAFE_API_KEY;
+
     if (!key)
       throw new DecisionError(
         "Jev credential unavailable. Set JEV_API_KEY and resume.",
       );
+
     const requestedModel =
       this.options.model ?? process.env.JEV_MODEL ?? "jev-latest";
     const body = JSON.stringify(
@@ -73,11 +81,14 @@ export class JevClient implements Chooser {
         questions: { next: { type: "choice", instructions, criteria } },
       }),
     );
+
     if (Buffer.byteLength(body) > 28_000)
       throw new DecisionError(
         "Jev decision context exceeds budget. Reduce the workflow context before resuming.",
       );
+
     const decisionID = randomUUID();
+
     for (let attempt = 1; attempt <= 6; attempt++) {
       context?.signal?.throwIfAborted();
       const usage: JevUsage = {
@@ -109,6 +120,7 @@ export class JevClient implements Chooser {
       let failure = "Jev connection failed or timed out";
       let retry = true;
       let delay = Math.min(1000 * 2 ** (attempt - 1), 16000);
+
       try {
         const response = await (this.options.fetch ?? fetch)(
           "https://api.typesafe.ai/v1/systemone",
@@ -129,6 +141,7 @@ export class JevClient implements Chooser {
           },
         );
         usage.httpStatus = response.status;
+
         if (!response.ok) {
           usage.status = "http_error";
           retry =
@@ -137,17 +150,21 @@ export class JevClient implements Chooser {
             ? `Jev authentication rejected (HTTP ${response.status}). Check your API key and access`
             : `Jev HTTP ${response.status}`;
           const header = response.headers.get("retry-after");
+
           if (header && retry) {
             const ms = /^\d+(\.\d+)?$/.test(header)
               ? Number(header) * 1000
               : Date.parse(header) - Date.now();
+
             if (Number.isFinite(ms)) delay = Math.max(delay, ms);
+
             if (delay > 30000) {
               retry = false;
               failure +=
                 ". Server requested a retry delay longer than 30 seconds; wait before resuming";
             }
           }
+
           await response.body?.cancel().catch(() => {});
         } else {
           usage.status = "invalid_response";
@@ -168,26 +185,32 @@ export class JevClient implements Chooser {
           failure = "Invalid Jev response";
         // No provider bodies, request objects, or arbitrary errors reach logs or state.
       }
+
       usage.finishedAt = new Date().toISOString();
       await record();
       context?.signal?.throwIfAborted();
+
       if (result) {
         await this.notice(
           "connected",
           "Jev connected; highest-ranked legal choice accepted.",
         );
+
         return result;
       }
+
       if (!retry || attempt === 6)
         throw new DecisionError(
           `${failure}. Paused after ${attempt} attempt(s). Resolve the issue and send foreman resume.`,
         );
+
       await this.notice(
         "retry",
         `${failure}. Retry ${attempt}/5 in ${delay / 1000}s.`,
       );
       await cancellableDelay(delay, context?.signal, this.options.sleep);
     }
+
     throw new DecisionError(
       "Jev retries exhausted. Send foreman resume to retry.",
     );
@@ -200,10 +223,12 @@ function cancellableDelay(
   sleep?: (ms: number) => Promise<void>,
 ): Promise<void> {
   signal?.throwIfAborted();
+
   return new Promise((resolve, reject) => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const clean = () => {
       if (timer) clearTimeout(timer);
+
       signal?.removeEventListener("abort", abort);
     };
     const abort = () => {
@@ -215,6 +240,7 @@ function cancellableDelay(
       resolve();
     };
     signal?.addEventListener("abort", abort, { once: true });
+
     if (sleep)
       sleep(ms).then(finish, (error) => {
         clean();

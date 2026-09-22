@@ -5,19 +5,23 @@ import { nextCapabilities } from "../workflow/graph.js";
 
 const str = { type: "string" },
   strings = { type: "array", items: str };
+
 const int = { type: "integer", minimum: 0 };
+
 const obj = (required: string[], properties: Record<string, unknown>) => ({
   type: "object",
   additionalProperties: false,
   required,
   properties,
 });
+
 const report = obj(["summary", "outcome"], {
   summary: str,
   outcome: { enum: ["ready", "incomplete", "blocked"] },
   covered: strings,
   questions: strings,
 });
+
 const delivery = obj(["id", "text", "terminal"], {
   id: str,
   text: str,
@@ -28,6 +32,7 @@ const delivery = obj(["id", "text", "terminal"], {
     expiresAt: int,
   }),
 });
+
 const request = obj(["id", "gate", "choices"], {
   id: str,
   gate: { enum: ["admission", "transition"] },
@@ -40,6 +45,7 @@ const request = obj(["id", "gate", "choices"], {
     expiresAt: int,
   }),
 });
+
 const active = {
   anyOf: [
     obj(["kind"], { kind: { const: "working" }, inputMessageID: str }),
@@ -53,7 +59,9 @@ const active = {
     obj(["kind", "delivery"], { kind: { const: "delivering" }, delivery }),
   ],
 };
+
 const model = obj(["providerID", "modelID"], { providerID: str, modelID: str });
+
 const run = obj(
   [
     "schema",
@@ -150,7 +158,9 @@ const run = obj(
     },
   },
 );
+
 const ajv = new Ajv({ strict: true, allErrors: true, ownProperties: true });
+
 const validate = ajv.compile<Database>(
   obj(["schema", "workflows"], {
     schema: { const: 3 },
@@ -161,11 +171,13 @@ const validate = ajv.compile<Database>(
 
 function migrate(old: any): Database {
   const db: Database = { schema: 3, workflows: {}, active: old.active };
+
   for (const [id, s] of Object.entries(old.workflows) as [string, any][]) {
     if (!s.capabilityOutputs)
       throw new Error(
         "Legacy state lacks output provenance; preserve it outside .jev/foreman-state.json before starting a new run.",
       );
+
     const workflow = parseWorkflow(s.workflow);
     const metadata = s.report
       ? {
@@ -179,6 +191,7 @@ function migrate(old: any): Database {
     let activePhase: ActivePhase = metadata
       ? { kind: "reported", report: metadata }
       : { kind: "working" };
+
     if (s.pendingDecision)
       activePhase = {
         kind: "deciding",
@@ -212,6 +225,7 @@ function migrate(old: any): Database {
           : { kind: "working", inputMessageID: delivery.id }
         : { kind: "dispatching", delivery };
     }
+
     if (s.status === "paused")
       phase = {
         kind: "paused",
@@ -235,6 +249,7 @@ function migrate(old: any): Database {
         },
       };
     else phase = activePhase;
+
     db.workflows[id] = {
       schema: 3,
       id,
@@ -265,8 +280,10 @@ function migrate(old: any): Database {
       modelHistory: s.modelHistory,
     };
   }
+
   return db;
 }
+
 export function parseDatabase(value: unknown): Database {
   const legacy = value as { schema?: number; workflows?: unknown };
   const db =
@@ -277,10 +294,12 @@ export function parseDatabase(value: unknown): Database {
       : value;
   // Normalize undefined optional properties just as persistence does.
   const normalized = JSON.parse(JSON.stringify(db));
+
   if (!validate(normalized))
     throw new Error(
       "Invalid Foreman state schema: " + ajv.errorsText(validate.errors),
     );
+
   for (const [id, s] of Object.entries((normalized as Database).workflows)) {
     if (
       id !== s.id ||
@@ -288,8 +307,10 @@ export function parseDatabase(value: unknown): Database {
       workflowHash(s.workflow) !== s.workflowHash
     )
       throw new Error("Invalid pinned workflow state");
+
     if (s.phase.kind === "delivering" && !s.phase.delivery.terminal)
       throw new Error("Invalid nonterminal delivery state");
   }
+
   return normalized as Database;
 }
