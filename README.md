@@ -45,6 +45,12 @@ foreman: Build a local issue tracker with persistent storage, tests, and setup i
 - Reply normally to answer a question and resume.
 - `jev_status` shows the current capability, producer outputs, history, evidence, and models.
 
+These prefixes are messages typed into OpenCode chat, not terminal commands.
+Continuing the same conversation resumes its paused workflow; you do not need
+to type `foreman resume`. Use that message to retry without adding instructions,
+or to attach the latest paused workflow in a new conversation in the same project.
+`jev_status` is an agent tool, not a terminal command.
+
 The historical `jev:`, `jev bypass:`, and `jev resume` prefixes also work.
 
 ## Define a workflow
@@ -115,8 +121,8 @@ runs, not a running contract. Evidence is bound to a capability visit and state
 revision. Re-entering a capability invalidates its completion and dependent
 completions. Persisted decisions and undelivered prompts recover on host startup;
 saved message IDs reconcile prompts already received by OpenCode. An accepted
-prompt with an interrupted response may need `foreman resume`; Foreman does not
-blindly repeat tools. New guidance invalidates accepted work before reconsideration.
+prompt with an interrupted response may pause until you reply in that conversation
+or send `foreman resume`; Foreman does not blindly repeat tools. New guidance invalidates accepted work before reconsideration.
 
 Jev requests run outside state locks and can be cancelled. Versioned decisions
 discard late results. Routing uses a bounded, explicitly truncated projection of
@@ -200,13 +206,41 @@ pause/resume across a host restart. It consumes provider resources; set
 `JEV_SMOKE_MODEL` to an available model if needed. Results and redacted
 transcripts are retained under the printed temporary directory and `artifacts/`.
 
-The core separates a pure event reducer (`engine.ts`) from the I/O controller,
+The core separates a pure event reducer (`src/core/runtime/engine.ts`) from the I/O controller,
 compiles and caches validated workflow contracts, and shares graph semantics
 between the runtime and checker. Persisted state has one discriminated phase
 and one producer-scoped output store.
 
-Core modules live under `src/core`; Jev transport/accounting under `src/jev`;
-the host adapter under `src/opencode`; the default workflow under
-`src/workflows/software-engineer`.
+## Repository layout
+
+```text
+src/
+  core/
+    workflow/       YAML loading, schema, compiler, graph, and checker
+    runtime/        Pure transitions, controller, decisions, and outputs
+    persistence/    Durable state store, validation, and migrations
+    types.ts        Shared host-independent contracts
+    models.ts       Model reference parsing
+    security.ts     Credential redaction
+  jev/              Jev transport and usage accounting
+  opencode/         OpenCode configuration and plugin hooks
+  workflows/        Bundled software-engineer YAML
+scripts/
+  build/            Clean output and copy workflow assets
+  cli/              Workflow checker and usage reporting
+  smoke/            Live Jev and OpenCode smoke tests
+  install.mjs       Local OpenCode plugin installer
+tests/
+  core/             Workflow, runtime, and persistence tests
+  jev/              Transport, retries, and accounting tests
+  opencode/         Plugin hooks and host recovery tests
+  support/          Shared fixtures
+docs/
+  architecture/     Runtime design and integration overview
+  workflows.md      Workflow authoring contract
+```
+
+See the [architecture overview](docs/architecture/overview.md) and
+[runtime design](docs/architecture/runtime.md).
 
 A configurable workflow does not itself guarantee better quality or lower cost.

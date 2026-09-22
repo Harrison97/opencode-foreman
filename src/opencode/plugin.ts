@@ -1,6 +1,6 @@
 import { type Plugin, tool } from "@opencode-ai/plugin";
-import { StateStore } from "../core/state.js";
-import { Controller } from "../core/controller.js";
+import { StateStore } from "../core/persistence/store.js";
+import { Controller } from "../core/runtime/controller.js";
 import { JevClient } from "../jev/client.js";
 import { UsageLog } from "../jev/usage.js";
 import { resolve } from "node:path";

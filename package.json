@@ -8,15 +8,15 @@
     ".": "./dist/opencode/plugin.js"
   },
   "scripts": {
-    "build": "node scripts/clean-build.mjs && tsc -p tsconfig.json && node scripts/copy-workflows.mjs",
+    "build": "node scripts/build/clean-build.mjs && tsc -p tsconfig.json && node scripts/build/copy-workflows.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test tests/*.test.ts",
+    "test": "tsx --test tests/core/*.test.ts tests/jev/*.test.ts tests/opencode/*.test.ts",
     "check": "npm run typecheck && npm test",
     "install:local": "npm run build && node scripts/install.mjs",
-    "usage:jev": "tsx scripts/jev-usage.ts",
-    "workflow:check": "tsx scripts/check-workflow.ts",
-    "smoke:jev": "tsx scripts/smoke-jev.ts",
-    "smoke:opencode": "tsx scripts/smoke-opencode.ts"
+    "usage:jev": "tsx scripts/cli/jev-usage.ts",
+    "workflow:check": "tsx scripts/cli/check-workflow.ts",
+    "smoke:jev": "tsx scripts/smoke/smoke-jev.ts",
+    "smoke:opencode": "tsx scripts/smoke/smoke-opencode.ts"
   },
   "dependencies": {
     "@opencode-ai/plugin": "1.18.30",

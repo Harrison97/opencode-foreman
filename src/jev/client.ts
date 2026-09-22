@@ -1,5 +1,5 @@
 import type { Chooser, Decision } from "../core/types.js";
-import { DecisionError, highestDecision } from "../core/decision.js";
+import { DecisionError, highestDecision } from "../core/runtime/decision.js";
 import { sanitize } from "../core/security.js";
 import { randomUUID } from "node:crypto";
 import { tokenCount, type JevUsage } from "./usage.js";

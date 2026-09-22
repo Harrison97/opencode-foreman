@@ -1,7 +1,7 @@
 import { access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadWorkflowFile } from '../core/loader.js';
+import { loadWorkflowFile } from '../core/workflow/loader.js';
 export async function loadWorkflowConfig(directory: string) {
   const file = join(directory, 'jev.workflow.yaml');
   let exists = true;
