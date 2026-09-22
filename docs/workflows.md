@@ -13,7 +13,7 @@ Its campaign stages and boxes are work artifacts, not another runtime capability
 version: 1
 name: my-workflow
 admission:
-  instructions: Use draft for substantial writing. BYPASS questions or small edits.
+  instructions: Use draft for substantial writing; bypass questions or small edits.
   entries: [draft]
 capabilities:
   draft:
@@ -44,6 +44,47 @@ Names may use letters, digits, underscores, and hyphens and must start with a
 letter. Names have no special meaning. There is no `kind`, `stage`, or second
 capability registry.
 
+## Top-level fields and admission
+
+| Field                    | Required | Meaning                                                 |
+| ------------------------ | -------- | ------------------------------------------------------- |
+| `version`                | Yes      | Workflow schema version; currently `1`.                 |
+| `name`                   | Yes      | Display name for the workflow.                          |
+| `admission.instructions` | Yes      | Describe which requests fit and how to choose an entry. |
+| `admission.entries`      | Yes      | Nonempty list of candidate starting capability IDs.     |
+| `capabilities`           | Yes      | Map of capability IDs to their definitions.             |
+| `imports`                | No       | Local capability libraries resolved by the loader.      |
+
+The current field is `admission.instructions`, not `when`. `entries` supplies the
+possible starting points; it is not a sequence to execute. Entry capabilities
+cannot be terminal or have prerequisites. Jev also receives a built-in bypass
+option for ordinary requests; you do not define a bypass capability. Describe the
+intended scope plainly. Explicit `foreman:` requests exclude bypass.
+
+Only the project-root `foreman.workflow.yaml` is discovered. Without it, the bundled
+default is used. There is no search through home directories or workflow folders.
+A file containing only `source: ../workflows/example.yaml` selects another local
+workflow instead of defining one inline; see workflow packages below.
+
+## Completion, gates, and next steps
+
+These fields have different jobs:
+
+- `completion` tells the agent what success means in prose.
+- `outputs` defines the shape of the structured data it must return on success.
+- `gate` adds runtime checks before a ready report is accepted.
+- `next` lists the legal destinations for each reported outcome; Jev chooses an
+  eligible destination rather than executing the list in order.
+- `dependsOn` requires prior successful capabilities. It does not schedule them.
+
+The agent reports `ready`, `incomplete`, or `blocked`. Gates can reject a claimed
+ready result; they cannot independently understand whether the product is good.
+Questions in a report pause the run for a human reply. `blocked` without questions
+can still route to another capability when its `next.blocked` list permits it.
+
+There is no configurable `fallback` field. Routing failures retry or pause;
+they do not silently select a default capability.
+
 ## Capability fields
 
 | Field                    | Meaning                                                                                                          |
@@ -68,6 +109,104 @@ Every capability must be reachable from admission and have a path to a terminal
 capability. The checker also explores completion prerequisites and output
 availability across admission paths and repair loops. Outcomes with no eligible
 next capability pause at runtime and produce a checker warning.
+
+## Model and tool configuration
+
+These optional fields go inside a capability:
+
+```yaml
+model: provider/model-id # Must exist in your OpenCode configuration.
+tools:
+  allow: [read, glob, grep, bash]
+  declaredChecksOnly: true
+gate:
+  commands: build.commands
+  acceptance: build.acceptance
+```
+
+This fragment assumes a completed `build` producer with the output contract shown
+below. Omit `model` to inherit the host model; there is no model-role registry or
+automatic cheaper/stronger model selection. Different configured capabilities can
+use different models.
+
+An `allow` list excludes tools not listed, except Foreman's control tools. Without
+it, tools are available unless denied or otherwise restricted. `deny` wins when a
+name appears in both lists. Names must match the host's native or MCP tools.
+
+Allowing `bash` permits shell execution, including possible writes. With
+`declaredChecksOnly: true`, shell calls must match the commands in `gate.commands`
+exactly. This is not an `rm` blacklist or a shell sandbox: a declared test command
+can itself modify files. The restriction requires a command gate.
+
+## A producer and verification loop
+
+This complete example separates preparing checks from running them. Output names
+are your choice; references must name their producer.
+
+```yaml
+version: 1
+name: Checked implementation
+admission:
+  instructions: Use build for implementing software changes with executable checks; bypass unrelated requests.
+  entries: [build]
+capabilities:
+  build:
+    purpose: Implement or repair the requested behavior.
+    instructions: >
+      Implement the requested behavior and prepare finite checks with behavioral
+      assertions. Report exact runnable commands and acceptance labels. On repair,
+      preserve the criteria and address the review findings.
+    completion: Implementation and checks are ready for review.
+    outputs:
+      type: object
+      additionalProperties: false
+      required: [commands, acceptance]
+      properties:
+        commands:
+          type: array
+          minItems: 1
+          items: { type: string, minLength: 1 }
+        acceptance:
+          type: array
+          minItems: 1
+          items: { type: string, minLength: 1 }
+    next:
+      ready: [review]
+      incomplete: [build]
+      blocked: [build]
+  review:
+    purpose: Check the implementation against its acceptance criteria.
+    instructions: >
+      Run each build.commands entry exactly in a separate native shell call from
+      the project root. Inspect whether the checks establish the promised behavior.
+      Report incomplete with findings for failed or missing coverage. Report ready
+      only with fresh passing evidence and all build.acceptance labels in covered.
+      Omit data. Do not edit the implementation or its check contract here.
+    completion: Fresh checks establish the required behavior.
+    dependsOn: [build]
+    tools:
+      allow: [read, glob, grep, bash, shell]
+      declaredChecksOnly: true
+    gate:
+      commands: build.commands
+      acceptance: build.acceptance
+    next:
+      ready: [deliver]
+      incomplete: [build]
+      blocked: [build]
+  deliver:
+    purpose: Deliver the checked result.
+    instructions: Explain the result, how to run it, and the checks actually passed.
+    completion: The user has the result.
+    dependsOn: [review]
+    terminal: true
+```
+
+A build report might contain `data: {commands: ["npm test"], acceptance:
+["Invalid input is rejected"]}`. The command must actually exist in that project.
+Review returns those exact acceptance strings in `covered`; it cannot replace the
+producer's saved commands through its own report. Re-entering build invalidates
+its completion and dependent completions, so repair requires fresh review evidence.
 
 ## Check a workflow
 
@@ -172,7 +311,7 @@ Paths are relative to the project directory where OpenCode starts; absolute
 paths and symlinks escaping the project are rejected. Subsequent capabilities
 can also use `files: plan.artifacts`, reading the completed producer's snapshot.
 Only file gates support checking the current capability's submitted outputs.
-The default SWE plan uses this pattern instead of overwriting `DESIGN.md`.
+The default engineering workflow uses this pattern for its durable artifacts.
 File gates check existence, not content quality or whether a file is newly created.
 
 `acceptance` is an LLM checklist: every referenced label must be included in the
@@ -210,7 +349,7 @@ attempt. Missing/rejected credentials and permanent HTTP errors pause immediatel
 Retry notices and pause reasons appear in OpenCode; the first successful request
 shows a connection notification. `foreman resume` retries the pending admission
 or transition, retaining an accepted report and its evidence. Each attempt is
-accounted separately. See README for backoff and server-delay limits.
+accounted separately. See [operations](operations.md#version-04-migration) for backoff and server-delay limits.
 
 Questions in a blocked/incomplete report pause the current capability until a
 real human response. Host errors, explicit stop, exhausted work units, and
