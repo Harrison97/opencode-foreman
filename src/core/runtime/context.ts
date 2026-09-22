@@ -1,4 +1,9 @@
-import type { WorkflowState, Workflow, DecisionRequest } from "../types.js";
+import type {
+  WorkflowState,
+  Workflow,
+  DecisionRequest,
+  Report,
+} from "../types.js";
 
 // A bounded projection, not a second copy of persisted state. Every omission is marked.
 function preview(value: unknown, depth = 0): unknown {
@@ -11,11 +16,15 @@ function preview(value: unknown, depth = 0): unknown {
 
   if (depth >= 4) return "[nested value omitted; inspect saved outputs]";
 
-  if (Array.isArray(value))
-    return [
-      ...value.slice(0, 8).map((v) => preview(v, depth + 1)),
-      ...(value.length > 8 ? [`[${value.length - 8} entries omitted]`] : []),
-    ];
+  if (Array.isArray(value)) {
+    const items = value.slice(0, 8).map((item) => preview(item, depth + 1));
+
+    if (value.length > 8) {
+      items.push(`[${value.length - 8} entries omitted]`);
+    }
+
+    return items;
+  }
 
   const entries = Object.entries(value);
 
@@ -30,12 +39,10 @@ function preview(value: unknown, depth = 0): unknown {
 export function decisionContext(state: WorkflowState): Record<string, unknown> {
   const phase =
     state.phase.kind === "paused" ? state.phase.resume : state.phase;
-  const report =
-    phase.kind === "deciding"
-      ? phase.request.report
-      : phase.kind === "reported"
-        ? phase.report
-        : undefined;
+  let report: Report | undefined;
+  if (phase.kind === "deciding") report = phase.request.report;
+  else if (phase.kind === "reported") report = phase.report;
+
   const context: Record<string, unknown> = {
     gate: phase.kind === "deciding" ? phase.request.gate : "transition",
     goal: preview(state.goal),
@@ -51,10 +58,14 @@ export function decisionContext(state: WorkflowState): Record<string, unknown> {
     note: "Bounded routing context. Full outputs/evidence remain in local state; omitted content is not evidence of completion.",
   };
   const outputs = context.outputs as Record<string, unknown>;
-  const entries = Object.entries(state.capabilityOutputs).sort(
-    ([a], [b]) =>
-      Number(b === state.capability) - Number(a === state.capability),
-  );
+  const entries = Object.entries(state.capabilityOutputs);
+  const currentIndex = entries.findIndex(([id]) => id === state.capability);
+
+  // Keep the current capability's output when the context budget runs out.
+  if (currentIndex > 0) {
+    const [current] = entries.splice(currentIndex, 1);
+    entries.unshift(current!);
+  }
 
   for (const [id, output] of entries) {
     outputs[id] = preview(output);

@@ -36,8 +36,10 @@ Validation includes Jev transport/accounting tests, generic state, graph, report
 evidence, pause, and adapter tests. Live smoke tests exercise the bundled YAML
 and a non-software workflow through the same host adapter.
 
-The pure reducer takes validated state, an event, and explicit clock/ID values.
-The controller performs I/O and commits reductions in short transactions. Jev
+The transition function takes saved state, an event, and timestamps/message IDs.
+It returns updated state, or the original state when an event is stale or irrelevant.
+The controller saves changes in a short transaction, then calls Jev if a decision
+is pending. Delivery and notifications remain the host adapter’s responsibility. Jev
 requests execute outside locks with cancellation and version checks; process
 leases prevent concurrent decision/dispatch ownership. Accepted output merging
 and gate validation precede atomic report publication.

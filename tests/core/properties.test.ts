@@ -3,7 +3,10 @@ import assert from "node:assert/strict";
 import fc from "fast-check";
 import { WorkflowCompiler } from "../../src/core/workflow/compiled.js";
 import { mergeOutput } from "../../src/core/runtime/output.js";
-import { reduceRun, type Event } from "../../src/core/runtime/engine.js";
+import {
+  applyWorkflowEvent,
+  type Event,
+} from "../../src/core/runtime/engine.js";
 import {
   invalidateCompleted,
   nextCapabilities,
@@ -105,15 +108,15 @@ test("property: arbitrary runtime events cannot mutate input or falsely complete
                             probabilities: { publish: 1 },
                           },
                         };
-          const result = reduceRun(s, event, {
+          const result = applyWorkflowEvent(s, event, {
             at: "2026-01-01T00:00:00.000Z",
             decisionID: "decision-" + i,
             messageID: "msg_" + i,
           });
           assert.deepEqual(s, before);
-          assert.ok(result.state.version >= s.version);
-          assert.notEqual(result.state.phase.kind, "complete");
-          s = result.state;
+          assert.ok(result.version >= s.version);
+          assert.notEqual(result.phase.kind, "complete");
+          s = result;
         }
       },
     ),

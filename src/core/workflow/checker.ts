@@ -10,14 +10,25 @@ export interface Diagnostic {
 
 type Schema = Record<string, any>;
 
-const properties = (w: Workflow, id: string): Record<string, Schema> =>
-  (w.capabilities[id]!.outputs?.properties as Record<string, Schema>) ?? {};
+const outputProperties = (
+  workflow: Workflow,
+  id: string,
+): Record<string, Schema> =>
+  (workflow.capabilities[id]!.outputs?.properties as Record<string, Schema>) ??
+  {};
 
-const types = (s: Schema): string[] =>
-  typeof s?.type === "string" ? [s.type] : Array.isArray(s?.type) ? s.type : [];
+function schemaTypes(schema: Schema | undefined): string[] {
+  if (typeof schema?.type === "string") return [schema.type];
+  if (Array.isArray(schema?.type)) return schema.type;
+
+  return [];
+}
 
 /** Semantic checks over a structurally validated workflow. No services or model calls. */
-export function checkWorkflow(w: Workflow, stateLimit = 20000): Diagnostic[] {
+export function checkWorkflow(
+  workflow: Workflow,
+  stateLimit = 20000,
+): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
   const emit = (
     severity: Diagnostic["severity"],
@@ -27,8 +38,8 @@ export function checkWorkflow(w: Workflow, stateLimit = 20000): Diagnostic[] {
     if (!diagnostics.some((d) => d.path === path && d.message === message))
       diagnostics.push({ severity, path, message });
   };
-  const fields = checkCapabilityContracts(w, emit);
-  checkReachability(w, fields, stateLimit, emit);
+  const fields = checkCapabilityContracts(workflow, emit);
+  checkReachability(workflow, fields, stateLimit, emit);
 
   return diagnostics;
 }
@@ -40,26 +51,22 @@ type EmitDiagnostic = (
 ) => void;
 
 function checkCapabilityContracts(
-  w: Workflow,
+  workflow: Workflow,
   emit: EmitDiagnostic,
 ): Set<string> {
-  const ids = Object.keys(w.capabilities);
-  const producers = new Map<string, { id: string; schema: Schema }[]>();
-
-  for (const id of ids)
-    for (const [field, schema] of Object.entries(properties(w, id))) {
-      producers.set(field, [...(producers.get(field) ?? []), { id, schema }]);
-    }
-
   const fields = new Set<string>();
 
-  for (const [id, c] of Object.entries(w.capabilities)) {
+  for (const [id, capability] of Object.entries(workflow.capabilities)) {
     const path = `capabilities.${id}`;
 
-    for (const key of c.append ?? []) {
-      const s = properties(w, id)[key];
+    for (const key of capability.append ?? []) {
+      const current = outputProperties(workflow, id)[key];
 
-      if (!s || types(s).length !== 1 || types(s)[0] !== "array")
+      if (
+        !current ||
+        schemaTypes(current).length !== 1 ||
+        schemaTypes(current)[0] !== "array"
+      )
         emit(
           "error",
           `${path}.append`,
@@ -67,22 +74,22 @@ function checkCapabilityContracts(
         );
     }
 
-    if (c.tools?.declaredChecksOnly && !c.gate?.commands)
+    if (capability.tools?.declaredChecksOnly && !capability.gate?.commands)
       emit(
         "error",
         `${path}.tools.declaredChecksOnly`,
         "Set gate.commands to a declared command-array field, or disable this restriction.",
       );
 
-    for (const tool of c.tools?.allow ?? [])
-      if (c.tools?.deny?.includes(tool))
+    for (const tool of capability.tools?.allow ?? [])
+      if (capability.tools?.deny?.includes(tool))
         emit(
           "warning",
           `${path}.tools`,
           `${tool} appears in allow and deny; deny wins. Remove the contradictory entry.`,
         );
 
-    for (const tool of c.tools?.deny ?? [])
+    for (const tool of capability.tools?.deny ?? [])
       if (["jev_status", "jev_report"].includes(tool))
         emit(
           "warning",
@@ -91,11 +98,11 @@ function checkCapabilityContracts(
         );
 
     if (
-      c.gate?.commands &&
+      capability.gate?.commands &&
       !["bash", "shell"].some(
-        (t) =>
-          !c.tools?.deny?.includes(t) &&
-          (!c.tools?.allow || c.tools.allow.includes(t)),
+        (tool) =>
+          !capability.tools?.deny?.includes(tool) &&
+          (!capability.tools?.allow || capability.tools.allow.includes(tool)),
       )
     )
       emit(
@@ -105,7 +112,7 @@ function checkCapabilityContracts(
       );
 
     for (const kind of ["commands", "acceptance", "files"] as const) {
-      const field = c.gate?.[kind];
+      const field = capability.gate?.[kind];
 
       if (!field || Array.isArray(field)) continue;
 
@@ -121,7 +128,7 @@ function checkCapabilityContracts(
         continue;
       }
 
-      if (!Object.hasOwn(w.capabilities, ref.producer)) {
+      if (!Object.hasOwn(workflow.capabilities, ref.producer)) {
         emit(
           "error",
           `${path}.gate.${kind}`,
@@ -140,7 +147,9 @@ function checkCapabilityContracts(
       if (
         ref.producer === id &&
         kind === "files" &&
-        !(c.outputs?.required as string[] | undefined)?.includes(ref.field)
+        !(capability.outputs?.required as string[] | undefined)?.includes(
+          ref.field,
+        )
       )
         emit(
           "error",
@@ -148,50 +157,51 @@ function checkCapabilityContracts(
           `Require ${ref.field} in this capability's outputs.required so its submitted paths can be checked.`,
         );
 
-      const source = (producers.get(ref.field) ?? []).filter(
-        (p) => p.id === ref.producer,
-      );
-
-      if (!source.length)
+      const outputs = outputProperties(workflow, ref.producer);
+      if (!Object.hasOwn(outputs, ref.field)) {
         emit(
           "error",
           `${path}.gate.${kind}`,
           `No declared output ${field}; declare ${ref.field} in ${ref.producer}.outputs.properties.`,
         );
-
-      for (const p of source) {
-        const t = types(p.schema),
-          item = types(p.schema.items);
-
-        if (
-          (t.length && (t.length !== 1 || t[0] !== "array")) ||
-          (item.length && (item.length !== 1 || item[0] !== "string"))
-        )
-          emit(
-            "error",
-            `${path}.gate.${kind}`,
-            `${field} must be an array of strings; correct its output schema.`,
-          );
-        else if (!t.length || !item.length)
-          emit(
-            "warning",
-            `${path}.gate.${kind}`,
-            `Cannot prove the type of ${field}; use explicit type: array and items.type: string for static checking.`,
-          );
-
-        if (!(p.schema.minItems >= 1))
-          emit(
-            "warning",
-            `${path}.gate.${kind}`,
-            `${field} permits an empty array, which this gate rejects; set minItems: 1.`,
-          );
+        continue;
       }
+
+      const schema = outputs[ref.field]!;
+
+      const outputTypes = schemaTypes(schema),
+        itemTypes = schemaTypes(schema.items);
+
+      if (
+        (outputTypes.length &&
+          (outputTypes.length !== 1 || outputTypes[0] !== "array")) ||
+        (itemTypes.length &&
+          (itemTypes.length !== 1 || itemTypes[0] !== "string"))
+      )
+        emit(
+          "error",
+          `${path}.gate.${kind}`,
+          `${field} must be an array of strings; correct its output schema.`,
+        );
+      else if (!outputTypes.length || !itemTypes.length)
+        emit(
+          "warning",
+          `${path}.gate.${kind}`,
+          `Cannot prove the type of ${field}; use explicit type: array and items.type: string for static checking.`,
+        );
+
+      if (!(schema.minItems >= 1))
+        emit(
+          "warning",
+          `${path}.gate.${kind}`,
+          `${field} permits an empty array, which this gate rejects; set minItems: 1.`,
+        );
     }
 
     if (
-      c.outputs &&
+      capability.outputs &&
       ["$ref", "allOf", "anyOf", "oneOf", "if", "patternProperties"].some(
-        (k) => k in c.outputs!,
+        (k) => k in capability.outputs!,
       )
     )
       emit(
@@ -205,18 +215,22 @@ function checkCapabilityContracts(
 }
 
 function checkReachability(
-  w: Workflow,
+  workflow: Workflow,
   fields: Set<string>,
   stateLimit: number,
   emit: EmitDiagnostic,
 ) {
-  const ids = Object.keys(w.capabilities);
+  const ids = Object.keys(workflow.capabilities);
   // Explore completion sets, preserving producer output presence across repair loops.
   // This mirrors runtime invalidation; plain graph reachability misses dependency deadlocks.
   type State = { id: string; done: Set<string>; data: Set<string> };
-  const stateKey = (s: State) =>
-    JSON.stringify([s.id, [...s.done].sort(), [...s.data].sort()]);
-  const queue: State[] = w.admission.entries.map((id) => ({
+  const stateKey = (current: State) =>
+    JSON.stringify([
+      current.id,
+      [...current.done].sort(),
+      [...current.data].sort(),
+    ]);
+  const queue: State[] = workflow.admission.entries.map((id) => ({
     id,
     done: new Set(),
     data: new Set(),
@@ -228,8 +242,8 @@ function checkReachability(
   let truncated = false;
 
   for (let n = 0; n < queue.length; n++) {
-    const s = queue[n]!;
-    const key = stateKey(s);
+    const current = queue[n]!;
+    const key = stateKey(current);
 
     if (visited.has(key)) continue;
 
@@ -239,65 +253,67 @@ function checkReachability(
     }
 
     visited.add(key);
-    reached.add(s.id);
-    const c = w.capabilities[s.id]!;
+    reached.add(current.id);
+    const capability = workflow.capabilities[current.id]!;
 
-    if (c.terminal) {
-      terminal.add(s.id);
+    if (capability.terminal) {
+      terminal.add(current.id);
       continue;
     }
 
     for (const kind of ["commands", "acceptance", "files"] as const) {
-      const field = c.gate?.[kind];
+      const field = capability.gate?.[kind];
 
       if (
         !field ||
         Array.isArray(field) ||
-        (kind === "files" && outputReference(field)?.producer === s.id)
+        (kind === "files" && outputReference(field)?.producer === current.id)
       )
         continue;
 
       if (
         field &&
-        (!s.data.has(field) ||
-          !s.done.has(outputReference(field)?.producer ?? ""))
+        (!current.data.has(field) ||
+          !current.done.has(outputReference(field)?.producer ?? ""))
       )
         emit(
           "error",
-          `capabilities.${s.id}.gate.${kind}`,
+          `capabilities.${current.id}.gate.${kind}`,
           `${field} is not guaranteed on every entry path. Require it in an earlier producer's outputs.required and prevent transitions that skip or invalidate that producer.`,
         );
     }
 
     for (const outcome of ["ready", "incomplete", "blocked"] as const) {
-      let done = new Set(s.done);
-      const data = new Set(s.data);
+      let done = new Set(current.done);
+      const data = new Set(current.data);
 
       if (outcome === "ready") {
-        done.add(s.id);
+        done.add(current.id);
 
         for (const field of fields)
-          if (outputReference(field)?.producer === s.id) data.delete(field);
+          if (outputReference(field)?.producer === current.id)
+            data.delete(field);
 
-        for (const field of (c.outputs?.required as string[] | undefined) ?? [])
+        for (const field of (capability.outputs?.required as
+          string[] | undefined) ?? [])
           if (
-            fields.has(`${s.id}.${field}`) &&
-            Object.hasOwn(properties(w, s.id), field)
+            fields.has(`${current.id}.${field}`) &&
+            Object.hasOwn(outputProperties(workflow, current.id), field)
           )
-            data.add(`${s.id}.${field}`);
-      } else done = invalidateCompleted(w, done, s.id);
+            data.add(`${current.id}.${field}`);
+      } else done = invalidateCompleted(workflow, done, current.id);
 
-      const targets = nextCapabilities(w, s.id, outcome, done);
+      const targets = nextCapabilities(workflow, current.id, outcome, done);
 
-      if (c.next?.[outcome]?.length && !targets.length)
+      if (capability.next?.[outcome]?.length && !targets.length)
         emit(
           "warning",
-          `capabilities.${s.id}.next.${outcome}`,
+          `capabilities.${current.id}.next.${outcome}`,
           "A reachable completion state has no eligible next capability; this outcome pauses. Adjust dependencies/transitions if that is unintended.",
         );
 
       for (const id of targets) {
-        const nextDone = invalidateCompleted(w, done, id);
+        const nextDone = invalidateCompleted(workflow, done, id);
         const next = { id, done: nextDone, data };
         const key = stateKey(next);
 
@@ -337,23 +353,23 @@ function checkReachability(
 }
 
 export function checkHost(
-  w: Workflow,
+  workflow: Workflow,
   models: string[],
   tools: string[],
 ): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
 
-  for (const [id, c] of Object.entries(w.capabilities)) {
-    if (c.model && !models.includes(c.model))
+  for (const [id, capability] of Object.entries(workflow.capabilities)) {
+    if (capability.model && !models.includes(capability.model))
       diagnostics.push({
         severity: "warning",
         path: `capabilities.${id}.model`,
-        message: `${c.model} is not advertised by a connected provider in this host; configure the provider/model before running.`,
+        message: `${capability.model} is not advertised by a connected provider in this host; configure the provider/model before running.`,
       });
 
     for (const name of new Set([
-      ...(c.tools?.allow ?? []),
-      ...(c.tools?.deny ?? []),
+      ...(capability.tools?.allow ?? []),
+      ...(capability.tools?.deny ?? []),
     ]))
       if (!tools.includes(name) && !["jev_status", "jev_report"].includes(name))
         diagnostics.push({

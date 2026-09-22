@@ -228,7 +228,7 @@ pause/resume across a host restart. It consumes provider resources; set
 `JEV_SMOKE_MODEL` to an available model if needed. Results and redacted
 transcripts are retained under the printed temporary directory and `artifacts/`.
 
-The core separates a pure event reducer (`src/core/runtime/engine.ts`) from the I/O controller,
+The core keeps workflow transitions (`src/core/runtime/engine.ts`) separate from the controller’s network and filesystem work,
 compiles and caches validated workflow contracts, and shares graph semantics
 between the runtime and checker. Persisted state has one discriminated phase
 and one producer-scoped output store.
@@ -239,7 +239,7 @@ and one producer-scoped output store.
 src/
   core/
     workflow/       YAML loading, schema, compiler, graph, and checker
-    runtime/        Pure transitions, controller, decisions, and outputs
+    runtime/        Workflow transitions, controller, decisions, and outputs
     persistence/    Durable state store, validation, and migrations
     types.ts        Shared host-independent contracts
     models.ts       Model reference parsing

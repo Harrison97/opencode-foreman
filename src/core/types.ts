@@ -150,34 +150,49 @@ export interface Database {
   workflows: Record<string, WorkflowState>;
 }
 
-export function viewState(s: WorkflowState): WorkflowView {
-  const p = s.phase.kind === "paused" ? s.phase.resume : s.phase;
-
-  return {
-    ...s,
-    status:
-      s.phase.kind === "paused"
-        ? "paused"
-        : s.phase.kind === "complete"
-          ? "complete"
-          : s.phase.kind === "bypassed"
-            ? "bypassed"
-            : p.kind === "delivering" ||
-                (p.kind === "dispatching" && p.delivery.terminal)
-              ? "delivering"
-              : "running",
-    questions: s.phase.kind === "paused" ? s.phase.questions : [],
-    pauseReason: s.phase.kind === "paused" ? s.phase.reason : undefined,
-    report:
-      p.kind === "reported"
-        ? p.report
-        : p.kind === "deciding"
-          ? p.request.report
-          : undefined,
-    pendingDecision: p.kind === "deciding" ? p.request.gate : undefined,
-    pending:
-      p.kind === "dispatching" || p.kind === "delivering"
-        ? { ...p.delivery, delivered: p.kind === "delivering" }
-        : undefined,
+export function viewState(state: WorkflowState): WorkflowView {
+  const phase =
+    state.phase.kind === "paused" ? state.phase.resume : state.phase;
+  const view: WorkflowView = {
+    ...state,
+    status: "running",
+    questions: [],
+    pauseReason: undefined,
+    report: undefined,
+    pendingDecision: undefined,
+    pending: undefined,
   };
+
+  switch (state.phase.kind) {
+    case "paused":
+      view.status = "paused";
+      view.questions = state.phase.questions;
+      view.pauseReason = state.phase.reason;
+      break;
+    case "complete":
+    case "bypassed":
+    case "delivering":
+      view.status = state.phase.kind;
+      break;
+    case "dispatching":
+      if (state.phase.delivery.terminal) view.status = "delivering";
+      break;
+  }
+
+  // A paused run still exposes the report or delivery it will resume.
+  if (phase.kind === "reported") {
+    view.report = phase.report;
+  } else if (phase.kind === "deciding") {
+    view.report = phase.request.report;
+    view.pendingDecision = phase.request.gate;
+  }
+
+  if (phase.kind === "dispatching" || phase.kind === "delivering") {
+    view.pending = {
+      ...phase.delivery,
+      delivered: phase.kind === "delivering",
+    };
+  }
+
+  return view;
 }

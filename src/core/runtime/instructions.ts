@@ -1,4 +1,4 @@
-import { viewState, type WorkflowState } from "../types.js";
+import { viewState, type WorkflowState, type WorkflowView } from "../types.js";
 import { sanitize } from "../security.js";
 
 export function workflowInstructions(state: WorkflowState) {
@@ -15,11 +15,7 @@ export function workflowInstructions(state: WorkflowState) {
     "Output JSON schema: " + JSON.stringify(capability.outputs ?? null),
     "Tool rules: " + JSON.stringify(capability.tools ?? {}),
     "Required gates: " + JSON.stringify(capability.gate ?? {}),
-    view.status === "paused"
-      ? "Present the pause reason and questions; wait for real user input. Do not use tools."
-      : view.status === "delivering" || view.status === "complete"
-        ? "Deliver this capability’s final response. Do not use tools."
-        : "Perform only the current capability. Call jev_report with summary, outcome and workflow-defined data. Incomplete/blocked reports cannot publish outputs. Questions are essential human decisions only. Correct rejected reports; finish your response after acceptance. Foreman chooses the next capability.",
+    taskInstructions(view.status),
     "Outputs are scoped by producer. Reference capabilityOutputs[capability][field]. Carry forward earlier criteria explicitly when producing your own contract. Never edit Foreman state/config to bypass gates or expose credentials.",
     JSON.stringify(
       sanitize({
@@ -34,4 +30,16 @@ export function workflowInstructions(state: WorkflowState) {
       }),
     ),
   ].join("\n");
+}
+
+function taskInstructions(status: WorkflowView["status"]): string {
+  if (status === "paused") {
+    return "Present the pause reason and questions; wait for real user input. Do not use tools.";
+  }
+
+  if (status === "delivering" || status === "complete") {
+    return "Deliver this capability’s final response. Do not use tools.";
+  }
+
+  return "Perform only the current capability. Call jev_report with summary, outcome and workflow-defined data. Incomplete/blocked reports cannot publish outputs. Questions are essential human decisions only. Correct rejected reports; finish your response after acceptance. Foreman chooses the next capability.";
 }

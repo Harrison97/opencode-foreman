@@ -7,7 +7,7 @@ import type {
   WorkflowState,
 } from "../types.js";
 
-export interface Entropy {
+export interface TransitionContext {
   at: string;
   decisionID: string;
   messageID: string;
@@ -26,25 +26,15 @@ export type Event =
   | { type: "finished"; messageID: string; parentID: string; error?: string }
   | { type: "evidence"; evidence: Evidence };
 
-export type Effect =
-  | { type: "choose"; id: string }
-  | { type: "dispatch"; id: string }
-  | { type: "notify"; reason: string };
-
-export interface Reduction {
-  state: WorkflowState;
-  effects: Effect[];
-}
-
 function invalidate(state: WorkflowState, id: string) {
   const kept = invalidateCompleted(
     state.workflow,
     Object.keys(state.completed),
     id,
   );
-  state.completed = Object.fromEntries(
-    [...kept].map((key) => [key, state.completed[key]!]),
-  );
+  for (const completedID of Object.keys(state.completed)) {
+    if (!kept.has(completedID)) delete state.completed[completedID];
+  }
 }
 
 function pause(
@@ -59,14 +49,14 @@ function pause(
 function enter(
   state: WorkflowState,
   id: string,
-  entropy: Entropy,
+  context: TransitionContext,
   decision?: Decision,
 ) {
   const previous = state.capability;
   state.history.push({
     from: previous,
     to: id,
-    at: entropy.at,
+    at: context.at,
     source: decision ? "jev" : "guard",
     ...(decision
       ? {
@@ -84,7 +74,7 @@ function enter(
   state.stalls = previous === id ? state.stalls + 1 : 0;
   const terminal = Boolean(state.workflow.capabilities[id]!.terminal);
   const delivery = {
-    id: entropy.messageID,
+    id: context.messageID,
     terminal,
     text: terminal
       ? "[Foreman] Deliver the final response following this capability. No more tools."
@@ -101,64 +91,51 @@ function enter(
     );
 }
 
-/** Pure transition. Handlers may mutate only this private clone, never the caller's state. */
-export function reduceRun(
+/** Apply an event to a copy. Stale or irrelevant events return the original state. */
+export function applyWorkflowEvent(
   input: WorkflowState,
   event: Event,
-  entropy: Entropy,
-): Reduction {
+  context: TransitionContext,
+): WorkflowState {
   const state = structuredClone(input);
-  const changed = applyEvent(state, event, entropy);
+  const changed = applyEvent(state, event, context);
 
-  if (!changed) return { state: input, effects: [] };
+  if (!changed) return input;
 
   state.version++;
-  state.updatedAt = entropy.at;
+  state.updatedAt = context.at;
 
-  return { state: state, effects: pendingEffects(state) };
+  return state;
 }
 
 function applyEvent(
   state: WorkflowState,
   event: Event,
-  entropy: Entropy,
+  context: TransitionContext,
 ): boolean {
   switch (event.type) {
     case "report":
       return onReport(state, event);
     case "idle":
-      return onIdle(state, event, entropy);
+      return onIdle(state, event, context);
     case "decision":
-      return onDecision(state, event, entropy);
+      return onDecision(state, event, context);
     case "decisionFailed":
       return onDecisionFailed(state, event);
     case "pause":
       return onPause(state, event);
     case "resume":
-      return onResume(state, event, entropy);
+      return onResume(state, event, context);
     case "received":
       return onReceived(state, event);
     case "retryDelivery":
       return onRetryDelivery(state, event);
     case "queue":
-      return onQueue(state, entropy);
+      return onQueue(state, context);
     case "finished":
       return onFinished(state, event);
     case "evidence":
       return onEvidence(state, event);
-  }
-}
-
-function pendingEffects(state: WorkflowState): Effect[] {
-  switch (state.phase.kind) {
-    case "deciding":
-      return [{ type: "choose", id: state.phase.request.id }];
-    case "dispatching":
-      return [{ type: "dispatch", id: state.phase.delivery.id }];
-    case "paused":
-      return [{ type: "notify", reason: state.phase.reason }];
-    default:
-      return [];
   }
 }
 
@@ -193,7 +170,7 @@ function onReport(
 function onIdle(
   state: WorkflowState,
   event: Extract<Event, { type: "idle" }>,
-  entropy: Entropy,
+  context: TransitionContext,
 ): boolean {
   const phase = state.phase;
 
@@ -243,12 +220,12 @@ function onIdle(
     choices.length === 1 &&
     state.workflow.capabilities[choices[0]!]!.terminal
   )
-    enter(state, choices[0]!, entropy);
+    enter(state, choices[0]!, context);
   else
     state.phase = {
       kind: "deciding",
       request: {
-        id: entropy.decisionID,
+        id: context.decisionID,
         gate: "transition",
         choices,
         report,
@@ -262,7 +239,7 @@ function onIdle(
 function onDecision(
   state: WorkflowState,
   event: Extract<Event, { type: "decision" }>,
-  entropy: Entropy,
+  context: TransitionContext,
 ): boolean {
   const phase = state.phase;
 
@@ -289,7 +266,7 @@ function onDecision(
     state.history.push({
       from: null,
       to: state.capability,
-      at: entropy.at,
+      at: context.at,
       source: "jev",
       confidence: event.answer.confidence,
       probabilities: event.answer.probabilities,
@@ -299,7 +276,7 @@ function onDecision(
       kind: "working",
       inputMessageID: phase.request.inputMessageID,
     };
-  } else enter(state, event.answer.choice, entropy, event.answer);
+  } else enter(state, event.answer.choice, context, event.answer);
 
   return true;
 }
@@ -342,7 +319,7 @@ function onPause(
 function onResume(
   state: WorkflowState,
   event: Extract<Event, { type: "resume" }>,
-  entropy: Entropy,
+  context: TransitionContext,
 ): boolean {
   const phase = state.phase;
 
@@ -371,7 +348,7 @@ function onResume(
       kind: "deciding",
       request: {
         ...resume.request,
-        id: entropy.decisionID,
+        id: context.decisionID,
         lease: undefined,
       },
     };
@@ -384,12 +361,12 @@ function onResume(
     state.phase = {
       kind: "dispatching",
       delivery: {
-        id: entropy.messageID,
+        id: context.messageID,
         terminal: true,
         text: "[Foreman] Deliver the result, incorporating the latest user guidance.",
       },
     };
-    state.internalIDs = [...state.internalIDs, entropy.messageID].slice(-200);
+    state.internalIDs = [...state.internalIDs, context.messageID].slice(-200);
   } else {
     // Changed requirements invalidate accepted work. The agent must reconsider it.
     state.epoch++;
@@ -445,7 +422,7 @@ function onRetryDelivery(
   return true;
 }
 
-function onQueue(state: WorkflowState, entropy: Entropy): boolean {
+function onQueue(state: WorkflowState, context: TransitionContext): boolean {
   const phase = state.phase;
 
   if (phase.kind !== "working") {
@@ -455,12 +432,12 @@ function onQueue(state: WorkflowState, entropy: Entropy): boolean {
   state.phase = {
     kind: "dispatching",
     delivery: {
-      id: entropy.messageID,
+      id: context.messageID,
       terminal: false,
       text: "[Foreman] Resume the admitted capability and existing goal.",
     },
   };
-  state.internalIDs = [...state.internalIDs, entropy.messageID].slice(-200);
+  state.internalIDs = [...state.internalIDs, context.messageID].slice(-200);
 
   return true;
 }

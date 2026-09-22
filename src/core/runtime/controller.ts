@@ -21,9 +21,13 @@ import { validateReport, validateReportOutput } from "./report.js";
 import { outputReference } from "../workflow/references.js";
 import { decisionContext, decisionPrompt } from "./context.js";
 import { workflowInstructions } from "./instructions.js";
-import { reduceRun, type Event, type Entropy } from "./engine.js";
+import {
+  applyWorkflowEvent,
+  type Event,
+  type TransitionContext,
+} from "./engine.js";
 
-const entropy = (): Entropy => ({
+const newTransitionContext = (): TransitionContext => ({
   at: new Date().toISOString(),
   decisionID: randomUUID(),
   messageID:
@@ -79,7 +83,7 @@ function parseUserMessage(text: string) {
   return { bypass, resumeCommand, stop, guidance };
 }
 
-/** Effect runner: pure transitions are committed in short transactions; Jev and files are checked outside locks. */
+/** Coordinates saved workflow state, Jev decisions, and report validation. */
 export class Controller {
   readonly workflow: Workflow;
   readonly maxTurns: number;
@@ -119,24 +123,23 @@ export class Controller {
 
       if (!state) return undefined;
 
-      const result = reduceRun(state, event, entropy());
-      db.workflows[state.id] = result.state;
+      const updated = applyWorkflowEvent(state, event, newTransitionContext());
+      db.workflows[state.id] = updated;
 
-      if (result.state.phase.kind === "bypassed") {
+      if (updated.phase.kind === "bypassed") {
         delete db.workflows[state.id];
 
         if (db.active === state.id) delete db.active;
       }
 
-      return { state: viewState(result.state), effects: result.effects };
+      return {
+        state: viewState(updated),
+        needsDecision: updated !== state && updated.phase.kind === "deciding",
+      };
     });
 
-    // Execute external work only after the durable reduction releases its lock.
-    if (
-      runChoice &&
-      committed?.effects.some((effect) => effect.type === "choose")
-    )
-      return this.decide(sessionID);
+    // The state is saved and the lock is released before calling Jev.
+    if (runChoice && committed?.needsDecision) return this.decide(sessionID);
 
     return committed?.state;
   }
@@ -314,11 +317,11 @@ export class Controller {
 
     if (bypass) {
       if (state) {
-        const detachedState = reduceRun(
+        const detachedState = applyWorkflowEvent(
           state,
           { type: "pause", reason: "Detached by user" },
-          entropy(),
-        ).state;
+          newTransitionContext(),
+        );
         detachedState.sessionID = "detached:" + state.id;
         db.workflows[state.id] = detachedState;
       }
@@ -354,7 +357,11 @@ export class Controller {
             guidance: guidance || undefined,
             inputMessageID: messageID,
           };
-      db.workflows[state.id] = reduceRun(state, event, entropy()).state;
+      db.workflows[state.id] = applyWorkflowEvent(
+        state,
+        event,
+        newTransitionContext(),
+      );
 
       return viewState(db.workflows[state.id]!);
     }
@@ -372,7 +379,7 @@ export class Controller {
     messageID?: string,
     host?: { model?: ModelRef; agent?: string },
   ): WorkflowState {
-    const e = entropy();
+    const context = newTransitionContext();
     const explicit = /^\s*(?:foreman|jev):/i.test(text);
 
     return {
@@ -386,7 +393,7 @@ export class Controller {
       phase: {
         kind: "deciding",
         request: {
-          id: e.decisionID,
+          id: context.decisionID,
           gate: "admission",
           choices: [
             ...this.workflow.admission.entries,
@@ -398,8 +405,8 @@ export class Controller {
       version: 0,
       epoch: 0,
       revision: 0,
-      createdAt: e.at,
-      updatedAt: e.at,
+      createdAt: context.at,
+      updatedAt: context.at,
       completed: {},
       capabilityOutputs: {},
       progress: [],
@@ -477,11 +484,11 @@ export class Controller {
           "Workflow changed while checking report; retry with current state",
         );
 
-      db.workflows[current.id] = reduceRun(
+      db.workflows[current.id] = applyWorkflowEvent(
         current,
         { type: "report", report, output },
-        entropy(),
-      ).state;
+        newTransitionContext(),
+      );
     });
   }
 
@@ -544,11 +551,11 @@ export class Controller {
         revision: state.revision,
         epoch: state.epoch,
       });
-      db.workflows[state.id] = reduceRun(
+      db.workflows[state.id] = applyWorkflowEvent(
         state,
         { type: "evidence", evidence },
-        entropy(),
-      ).state;
+        newTransitionContext(),
+      );
     });
   }
 

@@ -15,10 +15,7 @@ export interface CompiledCapability {
   readonly validate?: ValidateFunction;
 }
 
-const compiledBrand: unique symbol = Symbol("CompiledWorkflow");
-
 export interface CompiledWorkflow {
-  readonly [compiledBrand]: true;
   readonly definition: Workflow;
   readonly hash: string;
   readonly capabilities: ReadonlyMap<string, CompiledCapability>;
@@ -26,9 +23,9 @@ export interface CompiledWorkflow {
 
 const ajv = new Ajv({ allErrors: true, strict: true, ownProperties: true });
 
-function freeze(value: object): void {
+function freezeDefinition(value: object): void {
   for (const child of Object.values(value))
-    if (child && typeof child === "object") freeze(child);
+    if (child && typeof child === "object") freezeDefinition(child);
 
   Object.freeze(value);
 }
@@ -43,7 +40,7 @@ export class WorkflowCompiler {
     if (found) return found;
 
     const definition = parseWorkflow(input);
-    freeze(definition);
+    freezeDefinition(definition);
     const capabilities = new Map<string, CompiledCapability>();
 
     for (const [id, c] of Object.entries(definition.capabilities)) {
@@ -63,7 +60,6 @@ export class WorkflowCompiler {
     }
 
     const compiled: CompiledWorkflow = {
-      [compiledBrand]: true,
       definition,
       hash,
       capabilities,
