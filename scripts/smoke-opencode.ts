@@ -90,7 +90,7 @@ try {
   await start();
   const custom:Workflow={
     version:1,name:'greeting-editor',
-    admission:{instructions:'Use compose for requested greetings. BYPASS unrelated requests.',entries:['compose'],fallback:'compose'},
+    admission:{instructions:'Use compose for requested greetings. BYPASS unrelated requests.',entries:['compose']},
     capabilities:{
       compose:{purpose:'Write the greeting artifact',instructions:'Write greeting.txt containing exactly Hello Foreman followed by a newline. On a return after a failed check, restore this same correct greeting. Do not modify contract.mjs or the smoke marker. Report ready.',
         tools:{allow:['read','write','edit','apply_patch','glob','grep']},
@@ -98,12 +98,10 @@ try {
         outputs:{type:'object',additionalProperties:false,required:['commands','criteria'],properties:{
           commands:{const:['node contract.mjs']},criteria:{const:['Greeting is exact']},
         }},
-        next:{ready:['inspect'],incomplete:['compose'],blocked:['compose']},
-        fallback:{ready:'inspect',incomplete:'compose',blocked:'compose'}},
+        next:{ready:['inspect'],incomplete:['compose'],blocked:['compose']},},
       inspect:{purpose:'Check the greeting',instructions:'Run node contract.mjs exactly. On failure report incomplete; compose will repair. On success report ready with covered containing Greeting is exact. Do not edit files.',
         completion:'Native check passes',dependsOn:['compose'],tools:{allow:['read','bash','shell'],declaredChecksOnly:true},
-        gate:{checks:'commands',coverage:'criteria'},next:{ready:['hand_off'],incomplete:['compose'],blocked:['compose']},
-        fallback:{ready:'hand_off',incomplete:'compose',blocked:'compose'}},
+        gate:{checks:'commands',coverage:'criteria'},next:{ready:['hand_off'],incomplete:['compose'],blocked:['compose']},},
       hand_off:{purpose:'Deliver greeting',instructions:'Give the greeting and confirm the check result.',completion:'Delivered',dependsOn:['inspect'],terminal:true},
     },
   };

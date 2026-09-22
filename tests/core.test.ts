@@ -7,7 +7,7 @@ import { StateStore } from '../src/core/state.js';
 import { parseDecision, JevClient } from '../src/jev/client.js';
 import { fixture, ready, advance, sample, chooser } from './fixtures.js';
 
-test('custom names, dependencies, legal transitions, fallback, and terminal evidence', async () => {
+test('custom names, dependencies, legal transitions, and terminal evidence', async () => {
   const f = await fixture();
   assert.deepEqual(eligible(await f.state(), ['proof','publish']), []);
   assert.equal((await advance(f.c)).capability, 'proof');
@@ -77,13 +77,13 @@ test('internal prompts and repeated idle events cannot recursively admit', async
   assert.equal(Object.keys((await f.store.read()).workflows).length,1);
   assert.equal(next.capability,'proof');
 });
-test('low confidence follows configured fallback or pauses; never follows invalid choices', async () => {
-  for (const select of [chooser('nonexistent'),chooser('publish',0.2),{ choose: async () => { throw new Error('network'); } }]) {
-    const f = await fixture(sample,select); assert.equal((await advance(f.c)).capability,'proof');
-  }
-  const w = structuredClone(sample); delete w.capabilities.draft!.fallback;
-  const f = await fixture(w,chooser('publish',0.2)); await f.c.report('s',ready);
-  assert.equal((await f.c.gate('s','done'))?.status,'paused');
+test('highest-ranked choices are accepted without a confidence cutoff; decision failures pause', async () => {
+  const f = await fixture();
+  assert.equal((await advance(f.c)).capability, 'proof');
+  const bad = await fixture(sample, {choose: async () => {throw new Error('private network details');}});
+  assert.equal((await bad.state()).status, 'paused');
+  assert.equal((await bad.state()).pendingDecision, 'admission');
+  assert.ok(!(await bad.state()).pauseReason!.includes('private'));
 });
 test('explicit opt-in, normal bypass, stop and resume use generic runtime statuses', async () => {
   const f = await fixture(sample,chooser('BYPASS'));
@@ -124,7 +124,6 @@ test('durable state, locking, old state preservation and secret redaction', asyn
 test('missing reports and unsatisfied next dependencies cannot falsely complete',async()=>{
   const w=structuredClone(sample);
   w.capabilities.draft!.next!.incomplete=['publish'];
-  delete w.capabilities.draft!.fallback!.incomplete;
   const f=await fixture(w);
   const paused=await f.c.gate('s','no-report');
   assert.equal(paused?.status,'paused');
@@ -143,17 +142,17 @@ test('a completed workflow detaches before normal conversation or a fresh reques
 });
 test('Jev parser validates confidence, probabilities and legal choices', () => {
   const answer = {type:'choice',choice:'draft',confidence:0.2,probabilities:{draft:0.99,proof:0.01}};
-  assert.equal(parseDecision({answers:{next:answer}},['draft','proof']).confidence,0.2);
+  assert.equal(parseDecision({answers:{next:answer}},['draft','proof']).confidence,0.99);
   for(const invalid of [{...answer,choice:'other'},{...answer,confidence:NaN},{...answer,probabilities:{draft:0.3}}])
     assert.throws(()=>parseDecision({answers:{next:invalid}},['draft','proof']));
 });
 test('Jev HTTP contract and errors do not disclose credentials', async () => {
   let body: any;
-  const client=new JevClient({key:'fake-private-key',fetch:async(_url,options)=>{
+  const client=new JevClient({ sleep: async () => {},key:'fake-private-key',fetch:async(_url,options)=>{
     body=JSON.parse(options!.body as string);
     return Response.json({answers:{next:{type:'choice',choice:'draft',confidence:1,probabilities:{draft:1}}}});
   }});
   assert.equal((await client.choose({},{draft:'Write'},'choose')).choice,'draft');
   assert.equal(body.questions.next.type,'choice');
-  await assert.rejects(new JevClient({key:'fake-private-key',fetch:async()=>new Response('secret',{status:401})}).choose({},{draft:'Write'},'choose'),/^Error: Jev HTTP 401$/);
+  await assert.rejects(new JevClient({ sleep: async () => {},key:'fake-private-key',fetch:async()=>new Response('secret',{status:401})}).choose({},{draft:'Write'},'choose'),/authentication rejected.*HTTP 401/);
 });

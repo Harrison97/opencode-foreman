@@ -6,24 +6,25 @@ import { StateStore } from '../src/core/state.js';
 import type { Workflow, Chooser } from '../src/core/types.js';
 export const sample: Workflow = {
   version: 1, name: 'editorial',
-  admission: { instructions: 'Use the editorial workflow for substantial writing; BYPASS casual questions.', entries: ['draft'], fallback: 'draft' },
+  admission: { instructions: 'Use the editorial workflow for substantial writing; BYPASS casual questions.', entries: ['draft'] },
   capabilities: {
     draft: { purpose: 'Draft copy', instructions: 'Write copy with a voice contract.', completion: 'Copy and checks exist',
       outputs: { type: 'object', additionalProperties: false, required: ['checks','labels'], properties: {
         checks: { type: 'array', minItems: 1, items: { type: 'string', minLength: 1 } },
         labels: { type: 'array', minItems: 1, items: { type: 'string', minLength: 1 } },
       } }, append: ['labels'],
-      next: { ready: ['proof'], incomplete: ['draft'], blocked: ['draft'] },
-      fallback: { ready: 'proof', incomplete: 'draft', blocked: 'draft' } },
+      next: { ready: ['proof'], incomplete: ['draft'], blocked: ['draft'] }, },
     proof: { purpose: 'Proofread', instructions: 'Check copy and labels.', completion: 'Evidence is complete',
       dependsOn: ['draft'], tools: { allow: ['read','bash'], declaredChecksOnly: true },
       gate: { checks: 'checks', coverage: 'labels' },
-      next: { ready: ['publish'], incomplete: ['draft'], blocked: ['draft'] },
-      fallback: { ready: 'publish', incomplete: 'draft', blocked: 'draft' } },
+      next: { ready: ['publish'], incomplete: ['draft'], blocked: ['draft'] }, },
     publish: { purpose: 'Deliver copy', instructions: 'Deliver the finished text.', completion: 'Delivered', dependsOn: ['proof'], terminal: true },
   },
 };
-export const chooser = (choice = 'draft', confidence = 1): Chooser => ({ choose: async () => ({ choice, confidence, probabilities: { [choice]: 1 } }) });
+export const chooser = (preferred = 'draft', confidence = 1): Chooser => ({ choose: async (_state, criteria) => {
+  const keys = Object.keys(criteria); const choice = keys.includes(preferred) ? preferred : keys[0]!;
+  return { choice, confidence, probabilities: Object.fromEntries(keys.map(k => [k, k === choice ? 1 : 0])) };
+} });
 export const ready = { summary: 'Drafted', outcome: 'ready' as const, data: { checks: ['node --test'], labels: ['Correct tone'] } };
 export async function fixture(workflow = sample, select = chooser()) {
   const root = await mkdtemp(join(tmpdir(), 'foreman-test-'));

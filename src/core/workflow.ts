@@ -2,6 +2,7 @@ import { Ajv } from 'ajv';
 import { createHash } from 'node:crypto';
 import type { Workflow } from './types.js';
 import { parseModel } from './models.js';
+import { checkWorkflow } from './checker.js';
 
 const ajv = new Ajv({ allErrors: true, strict: true, ownProperties: true });
 const string = { type: 'string', minLength: 1, maxLength: 24000 };
@@ -12,7 +13,7 @@ const schema = {
   properties: {
     version: { const: 1 }, name: string,
     admission: { type: 'object', additionalProperties: false, required: ['instructions', 'entries'],
-      properties: { instructions: string, entries: { ...strings, minItems: 1 }, fallback: string } },
+      properties: { instructions: string, entries: { ...strings, minItems: 1 } } },
     capabilities: { type: 'object', minProperties: 1, maxProperties: 100,
       propertyNames: { pattern: '^[a-zA-Z][a-zA-Z0-9_-]*$' },
       additionalProperties: {
@@ -23,7 +24,6 @@ const schema = {
           tools: { type: 'object', additionalProperties: false, properties: { allow: strings, deny: strings, declaredChecksOnly: { type: 'boolean' } } },
           gate: { type: 'object', additionalProperties: false, properties: { files: strings, checks: string, coverage: string } },
           next: outcomes, terminal: { type: 'boolean' },
-          fallback: { type: 'object', additionalProperties: false, properties: { ready: string, incomplete: string, blocked: string } },
         },
       },
     },
@@ -49,9 +49,6 @@ export function parseWorkflow(value: unknown): Workflow {
     }
     for (const field of c.append ?? []) if (['__proto__', 'constructor', 'prototype'].includes(field)) throw new Error('Reserved output key');
     for (const target of [...Object.values(c.next ?? {}).flat(), ...(c.dependsOn ?? [])]) if (!has(target)) throw new Error('Unknown capability reference: ' + target);
-    for (const [outcome, target] of Object.entries(c.fallback ?? {})) {
-      if (!c.next?.[outcome as keyof typeof c.next]?.includes(target!)) throw new Error('Fallback must belong to its outcome transitions: ' + id);
-    }
     if (c.terminal && (Object.values(c.next ?? {}).some(list => list!.length) || c.gate || c.outputs)) throw new Error('Terminal delivery cannot have transitions, outputs, or gates');
     if (!c.terminal && !Object.values(c.next ?? {}).some(list => list!.length)) throw new Error('Nonterminal capability needs transitions: ' + id);
     if (c.gate?.coverage && !c.gate.checks) throw new Error('Coverage gate requires checks');
@@ -59,7 +56,6 @@ export function parseWorkflow(value: unknown): Workflow {
   for (const entry of w.admission.entries) {
     if (!has(entry) || w.capabilities[entry]!.terminal || w.capabilities[entry]!.dependsOn?.length) throw new Error('Entry must be an independent, nonterminal capability');
   }
-  if (w.admission.fallback && !w.admission.entries.includes(w.admission.fallback)) throw new Error('Admission fallback must be an entry');
   const visiting = new Set<string>(), done = new Set<string>();
   function visit(id: string) {
     if (visiting.has(id)) throw new Error('Cyclic capability dependencies');
@@ -78,6 +74,8 @@ export function parseWorkflow(value: unknown): Workflow {
   for (let n = 0; n < ids.length; n++) for (const id of ids)
     if (Object.values(w.capabilities[id]!.next ?? {}).flat().some(next => finishing.has(next))) finishing.add(id);
   if (finishing.size !== ids.length) throw new Error('Capability cannot reach terminal delivery');
+  const errors = checkWorkflow(w).filter(d => d.severity === 'error');
+  if (errors.length) throw new Error('Invalid workflow:\n' + errors.map(d => `${d.path}: ${d.message}`).join('\n'));
   return structuredClone(w);
 }
 export function workflowHash(w: Workflow): string { return createHash('sha256').update(JSON.stringify(w)).digest('hex'); }

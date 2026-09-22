@@ -7,7 +7,6 @@ admission:
     missing, plan when requirements are clear, or build when a complete design
     already exists. Make routine engineering decisions without asking the user.
   entries: [clarify, plan, build]
-  fallback: clarify
 capabilities:
   clarify:
     purpose: Resolve essential product ambiguity.
@@ -17,7 +16,7 @@ capabilities:
       record requirements and let Foreman select the next capability.
     completion: Requirements are clear enough to plan.
     tools:
-      allow: [read, glob, grep, list]
+      allow: [read, glob, grep]
     outputs:
       type: object
       additionalProperties: false
@@ -29,7 +28,6 @@ capabilities:
       ready: [plan]
       incomplete: [clarify]
       blocked: [clarify]
-    fallback: {ready: plan, incomplete: clarify, blocked: clarify}
   plan:
     purpose: Produce a concise design and finite verification contract.
     instructions: >
@@ -54,7 +52,6 @@ capabilities:
       ready: [build]
       incomplete: [plan, clarify]
       blocked: [plan, clarify]
-    fallback: {ready: build, incomplete: plan, blocked: plan}
   build:
     purpose: Implement or repair the requested software and tests.
     instructions: >
@@ -76,7 +73,6 @@ capabilities:
       ready: [review]
       incomplete: [build, plan, clarify]
       blocked: [plan, clarify, build]
-    fallback: {ready: review, incomplete: build, blocked: plan}
   review:
     purpose: Check the current software against real execution evidence.
     dependsOn: [build]
@@ -90,14 +86,13 @@ capabilities:
       containing every exact acceptance label. Do not restate checks in data.
     completion: All stored checks pass freshly and acceptance has been reviewed.
     tools:
-      allow: [read, glob, grep, list, bash, shell]
+      allow: [read, glob, grep, bash]
       declaredChecksOnly: true
     gate: {checks: checks, coverage: acceptance}
     next:
       ready: [deliver]
       incomplete: [build, plan]
       blocked: [plan, build]
-    fallback: {ready: deliver, incomplete: build, blocked: plan}
   deliver:
     purpose: Deliver the result with evidence and limitations.
     instructions: Summarize changes, checks actually run, setup instructions, and remaining limitations honestly.

@@ -17,13 +17,13 @@ const response = (extras: Record<string, unknown> = {}) => ({
 async function fixture(fetcher: typeof fetch) {
   const root = await mkdtemp(join(tmpdir(), 'jev-usage-test-'));
   const log = new UsageLog(root);
-  const client = new JevClient({ key: 'fake-test-key-not-real', fetch: fetcher, onUsage: record => log.append(record) });
+  const client = new JevClient({ sleep: async () => {}, key: 'fake-test-key-not-real', fetch: fetcher, onUsage: record => log.append(record) });
   return { root, log, client, call: () => client.choose({ goal: 'private goal' }, { IMPLEMENT: 'implement' }, 'next', { sessionID: 'ses_usage' }) };
 }
-test('persists actual model and exact tokens even for low-confidence decisions; counts a request once', async () => {
+test('persists actual model and exact tokens for accepted decisions; counts a request once', async () => {
   let requestBody: any;
   const f = await fixture(async (_url, init) => { requestBody = JSON.parse(init!.body as string); return Response.json(response()); });
-  assert.equal((await f.call()).confidence, 0.2);
+  assert.equal((await f.call()).confidence, 1);
   const records = (await new UsageLog(f.root).read()).records;
   assert.equal(records.length, 2);
   assert.equal(records[0]!.status, 'pending'); assert.equal(records[1]!.status, 'success');
@@ -41,7 +41,7 @@ test('invalid decisions still retain returned token usage', async () => {
   const f = await fixture(async () => Response.json(response({ answers: {} })));
   await assert.rejects(f.call(), /Invalid Jev/);
   const records = (await f.log.read()).records;
-  assert.equal(records[1]!.status, 'invalid_response'); assert.equal(summarizeUsage(records).inputTokens, 123);
+  assert.equal(records[1]!.status, 'invalid_response'); assert.equal(summarizeUsage(records).inputTokens, 6 * 123);
 });
 test('missing or malformed token usage stays unknown and does not break valid decisions', async () => {
   for (const usage of [undefined, { input_tokens: -2, output_tokens: 1.5 }, { input_tokens: '123', output_tokens: null }]) {
@@ -60,7 +60,7 @@ test('HTTP failures and network interruptions are recorded without response bodi
     await assert.rejects(f.call());
     const records = (await f.log.read()).records;
     assert.equal(records[1]!.status, status); assert.equal(records[1]!.inputTokens, null);
-    assert.equal(summarizeUsage(records).unknownInputRequests, 1);
+    assert.equal(summarizeUsage(records).unknownInputRequests, 6);
     assert.ok(!(await readFile(f.log.path, 'utf8')).includes('private'));
   }
 });
@@ -101,9 +101,9 @@ test('admission and workflow gates both attribute usage without recursively lock
 });
 test('a failed initial accounting write prevents an untracked provider request', async () => {
   let called = false;
-  const client = new JevClient({ key: 'fake-test-key-not-real', fetch: async () => { called = true; return Response.json(response()); },
+  const client = new JevClient({ sleep: async () => {}, key: 'fake-test-key-not-real', fetch: async () => { called = true; return Response.json(response()); },
     onUsage: async () => { throw new Error('Usage storage unavailable'); } });
-  await assert.rejects(client.choose({}, { IMPLEMENT: 'implement' }, 'next'), /storage unavailable/);
+  await assert.rejects(client.choose({}, { IMPLEMENT: 'implement' }, 'next'), /accounting could not be persisted/);
   assert.equal(called, false);
 });
 

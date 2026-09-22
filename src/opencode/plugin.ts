@@ -11,14 +11,23 @@ export const JevSupervisor: Plugin = async ({ directory, client }) => {
   if (process.env.JEV_DISABLED === '1') return {};
   const workflow = await loadWorkflowConfig(directory);
   const usage = new UsageLog(directory);
-  const controller = new Controller(new StateStore(directory), new JevClient({ onUsage: async record => {
+  let connected = false;
+  const notify = async (title: string, message: string, variant: 'warning' | 'success' = 'warning') => {
+    await client.app.log({ body: { service: 'jev-supervisor', level: variant === 'warning' ? 'warn' : 'info', message: title + ': ' + message } }).catch(() => {});
+    await client.tui.showToast({ body: { title, message, variant, duration: 12000 } }).catch(() => {});
+  };
+  const controller = new Controller(new StateStore(directory), new JevClient({ onNotice: async notice => {
+    if (notice.type === 'connected') {
+      if (!connected) { connected = true; await notify('Jev connected', notice.message, 'success'); }
+    } else await notify('Jev retrying', notice.message);
+  }, onUsage: async record => {
     try { await usage.append(record); }
     catch {
       await client.app.log({ body: { service: 'jev-supervisor', level: 'error', message: 'Could not write .jev/usage.jsonl; Jev usage accounting may be incomplete.' } }).catch(() => {});
       throw new Error('Jev usage accounting could not be persisted');
     }
   } }), {
-    workflow, threshold: Number(process.env.JEV_CONFIDENCE_THRESHOLD ?? 0.75), maxTurns: Number(process.env.JEV_MAX_TURNS ?? 40),
+    workflow, maxTurns: Number(process.env.JEV_MAX_TURNS ?? 40),
   });
   let disposed = false;
   const active = new Set<string>();
@@ -48,7 +57,7 @@ export const JevSupervisor: Plugin = async ({ directory, client }) => {
       if (!next) return;
       await log(`Capability ${s.capability} -> ${next.capability} (${next.status})`);
       if (next.status === 'paused') {
-        await client.tui.showToast({ body: { title: 'Foreman paused', message: [...next.questions, next.pauseReason ?? ''].join('\n'), variant: 'warning', duration: 12000 } }).catch(() => {});
+        await notify('Foreman paused', [...next.questions, next.pauseReason ?? ''].join('\n'));
         return;
       }
       if (next.pending && !disposed) {
@@ -82,6 +91,7 @@ export const JevSupervisor: Plugin = async ({ directory, client }) => {
         model: input.model ?? existing?.model ?? output.message.model, agent: input.agent,
       });
       if (state) {
+        if (state.status === 'paused') { await notify('Foreman paused', state.pauseReason ?? 'Awaiting user input'); return; }
         const model = await selectModel(state);
         if (model) {
           const changed = output.message.model?.providerID !== model.providerID || output.message.model?.modelID !== model.modelID;

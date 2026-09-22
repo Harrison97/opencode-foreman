@@ -71,6 +71,11 @@ Validate a definition without running a model:
 npm run workflow:check -- /path/to/jev.workflow.yaml
 ```
 
+The checker rejects broken references, missing output contracts, incompatible
+types, and dependency deadlocks. It reports warnings for ambiguous settings.
+Add `--host http://127.0.0.1:4096` to compare model and tool names with a running
+OpenCode server. See the configuration guide for analysis limits.
+
 There are no fixed capability names, report fields, admission categories,
 recovery labels, or required software-engineering steps. Set `model:
 provider/model` on any capability to override the user's selected OpenCode
@@ -85,7 +90,9 @@ labels when configured. Jev can choose only eligible transitions.
 
 Ready reports are atomic. Correcting a rejected coverage report does not rerun
 fresh checks. Failed work follows the workflow's incomplete/blocked transitions.
-Low confidence uses a configured eligible fallback; otherwise the run pauses.
+Jev's highest-ranked legal choice is accepted regardless of its score. Scores
+and distributions are recorded for inspection, not used as a confidence cutoff.
+Transient request failures retry up to five times, then pause visibly.
 Three consecutive repeats or the work-unit limit pause for guidance.
 
 Human pause and completion are runtime statuses, not mandatory capabilities.
@@ -119,10 +126,28 @@ Environment options:
 
 - `JEV_DISABLED=1`: disable the plugin.
 - `JEV_MODEL`: Jev model, default `jev-latest`.
-- `JEV_CONFIDENCE_THRESHOLD`: default 0.75.
 - `JEV_MAX_TURNS`: automatic work-unit limit, default 40; not a spending limit.
 
 ## Version 0.3 migration
+
+Current workflows no longer support `fallback` fields or a confidence threshold.
+Remove admission/capability `fallback` fields from custom YAML; the checker
+rejects them. `JEV_CONFIDENCE_THRESHOLD` no longer affects routing. Existing run
+snapshots keep their data, but routing never executes old fallback definitions.
+
+Network failures, timeouts, HTTP 408/429/5xx, and malformed decisions get up to
+five retries after the initial attempt (six attempts total). Backoff is 1, 2,
+4, 8, and 16 seconds; longer `Retry-After` delays are honored up to 30 seconds.
+If the server requests a longer wait, Foreman pauses rather than retrying early.
+Missing/rejected credentials and other permanent HTTP errors pause immediately.
+Send `foreman resume` after resolving the issue. A pending routing decision is
+retried without discarding accepted reports or rerunning their checks.
+
+OpenCode shows retry notices, a first-success **Jev connected** toast, and the
+reason when supervision pauses. API failure during admission pauses rather than
+silently bypassing supervision. Every HTTP attempt has its own usage record,
+linked by decision ID and attempt number; successful records include the choice,
+score, and probability distribution. Unknown token usage remains unknown.
 
 The old `jev.workflow.json` configured only models. It is rejected with an
 explicit migration message; convert to a full YAML workflow and put model

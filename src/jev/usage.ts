@@ -5,6 +5,11 @@ import { sanitize } from '../core/security.js';
 export interface JevUsage {
   schema: 1;
   requestID: string;
+  decisionID?: string;
+  attempt?: number;
+  choice?: string;
+  confidence?: number;
+  probabilities?: Record<string, number>;
   sessionID: string | null;
   startedAt: string;
   finishedAt: string | null;

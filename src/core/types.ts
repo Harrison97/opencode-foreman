@@ -13,13 +13,12 @@ export interface Capability {
   tools?: { allow?: string[]; deny?: string[]; declaredChecksOnly?: boolean };
   gate?: { files?: string[]; checks?: string; coverage?: string };
   next?: Partial<Record<Outcome, string[]>>;
-  fallback?: Partial<Record<Outcome, string>>;
   terminal?: boolean;
 }
 export interface Workflow {
   version: 1;
   name: string;
-  admission: { instructions: string; entries: string[]; fallback?: string };
+  admission: { instructions: string; entries: string[] };
   capabilities: Record<string, Capability>;
 }
 export interface Report {
@@ -30,7 +29,7 @@ export interface Report {
   questions?: string[];
 }
 export interface Evidence { callID: string; command: string; exit: number | null; output: string; at: string; revision: number; epoch: number }
-export interface Transition { from: string | null; to: string; at: string; source: 'jev' | 'fallback' | 'guard'; confidence?: number; reason: string }
+export interface Transition { from: string | null; to: string; at: string; source: 'jev' | 'guard'; confidence?: number; probabilities?: Record<string, number>; reason: string }
 export interface WorkflowState {
   schema: 2; id: string; sessionID: string; goal: string;
   workflow: Workflow; workflowHash: string;
@@ -38,6 +37,7 @@ export interface WorkflowState {
   epoch: number; revision: number; createdAt: string; updatedAt: string;
   data: Record<string, unknown>; completed: Record<string, number>;
   progress: string[]; questions: string[]; pauseReason?: string;
+  pendingDecision?: 'admission' | 'transition';
   report?: Report; evidence: Evidence[]; history: Transition[];
   internalIDs: string[]; consumedMessage?: string;
   pending?: { id: string; text: string; delivered: boolean };

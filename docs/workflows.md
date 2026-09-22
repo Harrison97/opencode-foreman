@@ -12,7 +12,6 @@ name: my-workflow
 admission:
   instructions: Use draft for substantial writing. BYPASS questions or small edits.
   entries: [draft]
-  fallback: draft
 capabilities:
   draft:
     purpose: Produce the requested draft.
@@ -30,7 +29,6 @@ capabilities:
       ready: [deliver]
       incomplete: [draft]
       blocked: [draft]
-    fallback: {ready: deliver, incomplete: draft, blocked: draft}
   deliver:
     purpose: Deliver the draft.
     instructions: Summarize the draft and link DRAFT.md.
@@ -55,7 +53,6 @@ capability registry.
 | append | Output array fields merged with existing values instead of replaced. |
 | dependsOn | Capabilities that must have completed successfully before selection. |
 | next | Allowed capability IDs by `ready`, `incomplete`, and `blocked` outcome. |
-| fallback | Explicit eligible next choice by outcome if Jev fails or has low confidence. |
 | tools.allow / tools.deny | Exact native/MCP tool names; deny takes precedence. |
 | tools.declaredChecksOnly | Restricts bash/shell to exact commands in this capability's checks gate. |
 | gate.files | Required existing project files, constrained to project directory. |
@@ -65,8 +62,52 @@ capability registry.
 
 Dependency edges must be acyclic. Transition edges may cycle for iterative work.
 Every capability must be reachable from admission and have a path to a terminal
-capability. Missing runtime outputs or unsatisfied dependencies may still leave
-no eligible next capability; Foreman pauses explicitly in that case.
+capability. The checker also explores completion prerequisites and output
+availability across admission paths and repair loops. Outcomes with no eligible
+next capability pause at runtime and produce a checker warning.
+
+## Check a workflow
+
+```sh
+npm run workflow:check -- /path/to/jev.workflow.yaml
+```
+
+Loading a workflow runs the same structural and semantic error checks. The CLI
+also prints warnings with field paths and suggested corrections. Errors exit
+nonzero; warnings do not prevent loading. Checks include:
+
+- Missing dependencies/transitions, dependency cycles, unreachable capabilities,
+  and dependency deadlocks.
+- Missing gate output fields, incompatible string-array types, and required
+  output availability on every explored entry path. Declare consumed fields in
+  the producer's top-level `outputs.properties` and `outputs.required`.
+- Conflicting shared output types, invalid append fields, and a capability
+  requiring an output that its own gate prohibits it from changing.
+- Command restrictions without a checks source, or command gates without an
+  allowed shell tool.
+- Warnings for allow/deny overlaps, exempt control tools, empty-array contracts,
+  and outcomes that can pause because no transition is eligible.
+
+Optional host inventory checks use an already running OpenCode server:
+
+```sh
+npm run workflow:check -- /path/to/jev.workflow.yaml --host http://127.0.0.1:4096
+```
+
+This makes read-only requests to `/provider` and `/experimental/tool/ids`, using
+the current working directory as the OpenCode project context. It warns about
+models not advertised by connected providers and tools absent from that host's
+inventory. It does not run models, test credentials, or guarantee tool access;
+MCP/dynamic tools may not appear in that inventory. Inventory failures exit
+nonzero. This CLI currently supports servers without HTTP authentication only.
+
+Static analysis is bounded to 20,000 distinct completion/output states; larger
+graphs warn that full reachability was not proven. Output analysis understands
+top-level properties, required fields, and explicit types; advanced JSON Schema
+constructs still validate at runtime but are not a general schema-subtyping
+proof. Missing guarantees must be made explicit in the output contract. File
+existence, actual command results, permissions, and instruction quality cannot
+be proven by checking YAML. No safety claim is made about allowed commands.
 
 The core implements only these generic mechanisms. Domain rules such as “write
 a design,” “test persistence,” or “ask about audience” belong in the workflow.
@@ -94,8 +135,18 @@ is allowed until the next capability.
 ## Admission, pause, and completion
 
 Normal requests go to Jev with the workflow's eligible entries plus BYPASS.
-Low-confidence automatic admission bypasses supervision. Explicit `foreman:`
-requests exclude BYPASS and use the admission fallback, or pause if none exists.
+The highest-probability legal option wins without a confidence cutoff. Explicit
+`foreman:` requests exclude BYPASS. Ties retain Jev's reported choice when it is
+tied for highest probability; otherwise declaration order breaks the tie.
+API failure during admission pauses instead of silently choosing BYPASS or an
+entry. There are no fallback fields.
+
+Transient failures and malformed responses retry five times after the initial
+attempt. Missing/rejected credentials and permanent HTTP errors pause immediately.
+Retry notices and pause reasons appear in OpenCode; the first successful request
+shows a connection notification. `foreman resume` retries the pending admission
+or transition, retaining an accepted report and its evidence. Each attempt is
+accounted separately. See README for backoff and server-delay limits.
 
 Questions in a blocked/incomplete report pause the current capability until a
 real human response. Host errors, explicit stop, exhausted work units, and

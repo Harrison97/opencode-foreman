@@ -21,7 +21,7 @@ test('schema rejects unknown semantics, references, dependency cycles, and inval
   const mutate: ((w:any)=>void)[] = [
     w=>w.capabilities.draft.kind='implementation',
     w=>w.capabilities.draft.next.ready=['missing'],
-    w=>w.capabilities.draft.fallback.ready='publish',
+    w=>w.capabilities.draft.fallback={ready:'publish'},
     w=>w.capabilities.draft.dependsOn=['proof'],
     w=>w.capabilities.publish.next={ready:['draft']},
     w=>w.capabilities.proof.model='bad model',

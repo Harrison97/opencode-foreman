@@ -56,6 +56,7 @@ test('accepted report drives real adapter idle continuation, routed model, usage
     await f.plugin.event!({event:{type:'session.idle',properties:{sessionID:'s'}}} as any);
     for(let n=0;n<40&&!f.prompts.length;n++)await delay(25);
     assert.equal(f.prompts.length,1);
+    assert.ok(f.toasts.some(t => t.body.title === 'Jev connected'));
     assert.deepEqual(f.prompts[0].body.model,{providerID:'test',modelID:'reviewer'});
     assert.equal(f.prompts[0].body.parts[0].synthetic,true);
     await f.plugin['chat.message']!({sessionID:'s'},{message:{id:f.prompts[0].body.messageID},parts:f.prompts[0].body.parts} as any);
@@ -65,6 +66,19 @@ test('accepted report drives real adapter idle continuation, routed model, usage
     const usage=summarizeUsage((await new UsageLog(f.root).read()).records);
     assert.equal(usage.requests,1);assert.equal(usage.inputTokens,45);
   }finally{globalThis.fetch=fetcher;if(key===undefined)delete process.env.JEV_API_KEY;else process.env.JEV_API_KEY=key;await f.plugin.dispose!();}
+});
+test('Jev authentication failure is visible at admission and does not silently bypass',async()=>{
+  const f=await setup(); const fetcher=globalThis.fetch; const key=process.env.JEV_API_KEY;
+  process.env.JEV_API_KEY='fake-adapter-key'; let requests=0;
+  globalThis.fetch=async()=>{requests++;return new Response('private provider message',{status:401});};
+  try {
+    await f.plugin['chat.message']!({sessionID:'new'} as any,{message:{id:'first'},parts:[{type:'text',text:'Write a handbook'}]} as any);
+    assert.equal(requests,1);
+    const state=await f.c.get('new');
+    assert.equal(state?.status,'paused'); assert.equal(state?.pendingDecision,'admission');
+    assert.ok(f.toasts.some(t=>t.body.title==='Foreman paused' && t.body.message.includes('authentication rejected')));
+    assert.ok(!JSON.stringify(f.toasts).includes('private provider message'));
+  } finally {globalThis.fetch=fetcher;if(key===undefined)delete process.env.JEV_API_KEY;else process.env.JEV_API_KEY=key;await f.plugin.dispose!();}
 });
 test('errors pause, synthetic prompts cannot resume, and native child sessions bypass admission',async()=>{
   const f=await setup();

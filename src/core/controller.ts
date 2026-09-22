@@ -5,6 +5,7 @@ import type { Chooser, Workflow, WorkflowState, Database, Report, Evidence, Outc
 import { StateStore } from './state.js';
 import { parseWorkflow, validateOutput, workflowHash } from './workflow.js';
 import { sanitize } from './security.js';
+import { DecisionError, highestDecision } from './decision.js';
 import { parseModel } from './models.js';
 
 const now = () => new Date().toISOString();
@@ -26,25 +27,36 @@ function invalidate(s: WorkflowState, id: string) {
 }
 export class Controller {
   readonly workflow: Workflow;
-  readonly threshold: number;
   readonly maxTurns: number;
-  constructor(readonly store: StateStore, readonly chooser: Chooser, options: { workflow: Workflow; threshold?: number; maxTurns?: number }) {
+  constructor(readonly store: StateStore, readonly chooser: Chooser, options: { workflow: Workflow; maxTurns?: number }) {
     this.workflow = parseWorkflow(options.workflow);
-    this.threshold = options.threshold ?? 0.75;
     this.maxTurns = options.maxTurns ?? 40;
-    if (!Number.isFinite(this.threshold) || this.threshold < 0 || this.threshold > 1 || !Number.isInteger(this.maxTurns) || this.maxTurns < 1) throw new Error('Invalid supervisor configuration');
+    if (!Number.isInteger(this.maxTurns) || this.maxTurns < 1) throw new Error('Invalid supervisor configuration');
   }
   async get(id: string) { return findSession(await this.store.read(), id); }
-  private async choose(s: unknown, ids: string[], fallback: string | undefined, workflow: Workflow, sessionID: string, admission = false) {
+  private async choose(s: unknown, ids: string[], workflow: Workflow, sessionID: string, admission = false) {
     const criteria = Object.fromEntries(ids.map(id => [id, id === 'BYPASS' ? 'Handle normally without this workflow' : workflow.capabilities[id]!.purpose]));
     try {
-      const answer = await this.chooser.choose(sanitize(s), criteria,
+      const answer = highestDecision(await this.chooser.choose(sanitize(s), criteria,
         admission ? workflow.admission.instructions : 'Choose the next useful capability among ONLY the eligible options. Follow the workflow completion requirements, latest result and evidence. Avoid repeating unchanged work.',
-        { sessionID });
-      if (ids.includes(answer.choice) && Number.isFinite(answer.confidence) && answer.confidence >= this.threshold && answer.confidence <= 1)
-        return { id: answer.choice, source: 'jev' as const, confidence: answer.confidence, reason: 'Jev selected an eligible capability' };
-    } catch { /* A bounded configured fallback or a pause, never an invented action. */ }
-    return fallback && ids.includes(fallback) ? { id: fallback, source: 'fallback' as const, reason: 'Jev unavailable, invalid, or below confidence threshold' } : undefined;
+        { sessionID }), ids);
+      return { id: answer.choice, source: 'jev' as const, confidence: answer.confidence, probabilities: answer.probabilities, reason: 'Highest-ranked eligible Jev choice' };
+    } catch (error) {
+      throw error instanceof DecisionError ? error : new DecisionError('Jev decision failed. Check connectivity and credentials, then send foreman resume.');
+    }
+  }
+  private async admission(s: WorkflowState) {
+    const explicit = /^\s*(?:foreman|jev):/i.test(s.goal);
+    try {
+      const decision = await this.choose({ gate: 'admission', goal: s.goal }, [...s.workflow.admission.entries, ...(explicit ? [] : ['BYPASS'])], s.workflow, s.sessionID, true);
+      delete s.pendingDecision; delete s.pauseReason;
+      if (decision.id === 'BYPASS') return undefined;
+      s.capability = decision.id; s.status = 'running';
+      s.history.push({ from: null, to: decision.id, at: now(), ...decision });
+    } catch (error) {
+      s.pendingDecision = 'admission'; this.pauseState(s, (error as DecisionError).message);
+    }
+    return s;
   }
   async admit(sessionID: string, text: string, messageID?: string, synthetic = false, host?: Pick<WorkflowState, 'model' | 'agent'>) {
     return this.store.transaction(async db => {
@@ -67,6 +79,18 @@ export class Controller {
         if (/^\s*(stop|cancel|pause)(\s+(working|the workflow|this task))?[.!]?\s*$/i.test(text)) {
           this.pauseState(s, 'Paused at the user’s request'); return s;
         }
+        if (s.pendingDecision) {
+          s.model = host?.model ?? s.model; s.agent = host?.agent ?? s.agent;
+          s.status = 'running'; delete s.pauseReason;
+          if (s.pendingDecision === 'admission') {
+            const resumed = await this.admission(s);
+            if (!resumed) { delete db.workflows[s.id]; if (db.active === s.id) delete db.active; }
+            return resumed;
+          }
+          const resumed = await this.transition(s);
+          resumed.pending = undefined; // The real user turn carries this continuation.
+          return resumed;
+        }
         s.status = 'running'; s.pauseReason = undefined; s.questions = [];
         s.report = undefined; s.pending = undefined; s.turns = 0; s.stalls = 0;
         s.epoch++; s.revision++; invalidate(s, s.capability);
@@ -74,20 +98,14 @@ export class Controller {
         s.model = host?.model ?? s.model; s.agent = host?.agent ?? s.agent;
         s.updatedAt = now(); return s;
       }
-      const explicit = /^\s*(?:foreman|jev):/i.test(text);
       const w = this.workflow;
-      const ids = [...w.admission.entries, ...(explicit ? [] : ['BYPASS'])];
-      const decision = await this.choose({ gate: 'admission', goal: text }, ids,
-        explicit ? w.admission.fallback : 'BYPASS', w, sessionID, true);
-      if (decision?.id === 'BYPASS') return undefined;
-      const initial = decision?.id ?? w.admission.entries[0]!;
       s = { schema: 2, id: randomUUID(), sessionID, goal: text,
         workflow: structuredClone(w), workflowHash: workflowHash(w),
-        capability: initial, status: decision ? 'running' : 'paused',
+        capability: w.admission.entries[0]!, status: 'paused', pendingDecision: 'admission',
         epoch: 0, revision: 0, createdAt: now(), updatedAt: now(), data: {}, completed: {},
         progress: [], questions: [], evidence: [], history: [], internalIDs: [], turns: 0, stalls: 0, modelHistory: [], ...host };
-      if (decision) s.history.push({ from: null, to: initial, at: now(), ...decision });
-      else s.pauseReason = 'No confident admission decision and no configured fallback. Review the workflow and resume.';
+      const admitted = await this.admission(s);
+      if (!admitted) return undefined;
       db.workflows[s.id] = sanitize(s); db.active = s.id; return s;
     });
   }
@@ -187,18 +205,27 @@ export class Controller {
       s.consumedMessage = assistantMessage; s.pending = undefined; s.turns++;
       if (s.turns >= this.maxTurns) { this.pauseState(s, 'Automatic work-unit limit reached; reply to continue'); return s; }
       if (s.questions.length) { this.pauseState(s, 'Human input requested'); return s; }
+      return this.transition(s);
+    });
+  }
+  private async transition(s: WorkflowState) {
       const current = s.workflow.capabilities[s.capability]!;
       const outcome: Outcome = s.report?.outcome ?? 'incomplete';
       if (outcome === 'ready') s.completed[s.capability] = s.epoch;
       else invalidate(s, s.capability);
       const legal = eligible(s, current.next?.[outcome] ?? []).filter(target => outcome === 'ready' || !s.workflow.capabilities[target]!.terminal);
       if (!legal.length) { this.pauseState(s, 'No eligible transition for ' + outcome); return s; }
-      const decision = legal.length === 1 && s.workflow.capabilities[legal[0]!]!.terminal
+      let decision;
+      try {
+      decision = legal.length === 1 && s.workflow.capabilities[legal[0]!]!.terminal
         ? { id: legal[0]!, source: 'guard' as const, reason: 'Capability gates passed; terminal delivery is the only eligible transition' }
         : await this.choose({ goal: s.goal, capability: s.capability, completion: current.completion,
           data: s.data, report: s.report, progress: s.progress.slice(-6), evidence: s.evidence.filter(e => e.epoch === s.epoch) },
-          legal, current.fallback?.[outcome], s.workflow, id);
-      if (!decision) { this.pauseState(s, 'No confident transition and no eligible configured fallback'); return s; }
+          legal, s.workflow, s.sessionID);
+      } catch (error) {
+        s.pendingDecision = 'transition'; this.pauseState(s, (error as DecisionError).message); return s;
+      }
+      delete s.pendingDecision; delete s.pauseReason;
       const previous = s.capability;
       s.history.push({ from: previous, to: decision.id, at: now(), ...decision });
       s.capability = decision.id; s.epoch++; s.report = undefined;
@@ -213,7 +240,6 @@ export class Controller {
         ? '[Foreman] Deliver the final response following the configured terminal capability. No more tools.'
         : '[Foreman] Continue the existing goal using capability ' + s.capability + '. Follow injected instructions, submit jev_report, and finish the turn.' };
       s.updatedAt = now(); return s;
-    });
   }
   instructions(s: WorkflowState) {
     const c = s.workflow.capabilities[s.capability]!;

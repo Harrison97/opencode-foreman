@@ -23,8 +23,10 @@ interpreted as new workflows. Explicit `foreman:` admission always works;
 automatic admission is decided using the workflow's own admission instructions.
 
 Jev only receives eligible choices from the configured outcome transitions and
-dependency graph. Low confidence uses an explicitly configured eligible fallback
-or pauses. Ready reports are validated atomically; passing evidence is reused
+dependency graph. The highest-probability legal option wins without a confidence
+cutoff. Transient failures retry five times before pausing; authentication errors
+pause immediately. Pending decisions survive reload and resume without repeating
+accepted work. Ready reports are validated atomically; passing evidence is reused
 when merely correcting a report. Failed checks permit configured backward
 transitions. Revisiting a capability invalidates its completion and dependent
 completions. Evidence is bound to a capability visit and data revision.
