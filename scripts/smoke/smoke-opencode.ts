@@ -65,7 +65,9 @@ async function start() {
     if (server.exitCode !== null) throw new Error("OpenCode startup failed");
     try {
       if ((await fetch(url + "/global/health")).ok) return;
-    } catch {}
+    } catch {
+      // The host may not have bound its port yet; poll until the startup deadline.
+    }
     await delay(250);
   }
   throw new Error("Host health timeout");

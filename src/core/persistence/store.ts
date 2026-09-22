@@ -61,6 +61,7 @@ export class StateStore {
           if (Date.now() > deadline)
             throw new Error(
               "Jev state is busy; retry after the other host finishes",
+              { cause: e },
             );
           await delay(25);
         }

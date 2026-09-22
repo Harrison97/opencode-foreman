@@ -5,7 +5,13 @@ import { join } from "node:path";
 import { Controller } from "../../src/core/runtime/controller.js";
 import { StateStore } from "../../src/core/persistence/store.js";
 import { JevClient } from "../../src/jev/client.js";
-import { fixture, sample, ready, advance, chooser } from "../support/fixtures.js";
+import {
+  fixture,
+  sample,
+  ready,
+  advance,
+  chooser,
+} from "../support/fixtures.js";
 
 test("append validates the final snapshot atomically, including artifact paths", async () => {
   const w = structuredClone(sample);

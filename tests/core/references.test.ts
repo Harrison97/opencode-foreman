@@ -1,7 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseWorkflow } from "../../src/core/workflow/schema.js";
-import { Controller, checkCommands } from "../../src/core/runtime/controller.js";
+import {
+  Controller,
+  checkCommands,
+} from "../../src/core/runtime/controller.js";
 import { StateStore } from "../../src/core/persistence/store.js";
 import { outputValue } from "../../src/core/workflow/references.js";
 import {

@@ -22,7 +22,7 @@ capabilities:
       additionalProperties: false
       required: [synopsis]
       properties:
-        synopsis: {type: string, minLength: 1}
+        synopsis: { type: string, minLength: 1 }
     gate:
       files: [DRAFT.md]
     next:
@@ -43,22 +43,22 @@ capability registry.
 
 ## Capability fields
 
-| Field | Meaning |
-|---|---|
-| purpose | Short description supplied to Jev for selection. |
-| instructions | Agent instructions, inline or `{file: prompts/draft.md}`. |
-| completion | Prose criteria for the agent; use gates for mechanical checks. |
-| model | Optional OpenCode `provider/model`; defaults to selected host model. |
-| outputs | JSON Schema for a ready report's `data`, inline or `{file: schemas/output.json}`. |
-| append | Output array fields unioned with this producer’s previous values before validation. |
-| dependsOn | Capabilities that must have completed successfully before selection. |
-| next | Allowed capability IDs by `ready`, `incomplete`, and `blocked` outcome. |
-| tools.allow / tools.deny | Exact native/MCP tool names; deny takes precedence. |
-| tools.declaredChecksOnly | Restricts bash/shell to exact commands in this capability's checks gate. |
-| gate.files | Fixed project-relative paths or a `capability.output` reference to an artifact-path array. |
-| gate.commands | Required `capability.output` reference to a nonempty array of command strings, e.g. `build.commands`. |
-| gate.acceptance | Required `capability.output` reference to labels that must appear exactly in `covered`, e.g. `build.acceptance`. |
-| terminal | Delivery-only capability; cannot have outputs, gates, or outgoing transitions. |
+| Field                    | Meaning                                                                                                          |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| purpose                  | Short description supplied to Jev for selection.                                                                 |
+| instructions             | Agent instructions, inline or `{file: prompts/draft.md}`.                                                        |
+| completion               | Prose criteria for the agent; use gates for mechanical checks.                                                   |
+| model                    | Optional OpenCode `provider/model`; defaults to selected host model.                                             |
+| outputs                  | JSON Schema for a ready report's `data`, inline or `{file: schemas/output.json}`.                                |
+| append                   | Output array fields unioned with this producer’s previous values before validation.                              |
+| dependsOn                | Capabilities that must have completed successfully before selection.                                             |
+| next                     | Allowed capability IDs by `ready`, `incomplete`, and `blocked` outcome.                                          |
+| tools.allow / tools.deny | Exact native/MCP tool names; deny takes precedence.                                                              |
+| tools.declaredChecksOnly | Restricts bash/shell to exact commands in this capability's checks gate.                                         |
+| gate.files               | Fixed project-relative paths or a `capability.output` reference to an artifact-path array.                       |
+| gate.commands            | Required `capability.output` reference to a nonempty array of command strings, e.g. `build.commands`.            |
+| gate.acceptance          | Required `capability.output` reference to labels that must appear exactly in `covered`, e.g. `build.acceptance`. |
+| terminal                 | Delivery-only capability; cannot have outputs, gates, or outgoing transitions.                                   |
 
 Dependency edges must be acyclic. Transition edges may cycle for iterative work.
 Every capability must be reachable from admission and have a path to a terminal
@@ -159,7 +159,7 @@ plan:
       artifacts:
         type: array
         minItems: 1
-        items: {type: string, minLength: 1}
+        items: { type: string, minLength: 1 }
   gate:
     files: plan.artifacts
 ```

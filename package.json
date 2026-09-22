@@ -8,15 +8,20 @@
     ".": "./dist/opencode/plugin.js"
   },
   "scripts": {
-    "build": "node scripts/build/clean-build.mjs && tsc -p tsconfig.json && node scripts/build/copy-workflows.mjs",
+    "build": "node scripts/build/clean-build.mjs && tsc -p tsconfig.build.json && node scripts/build/copy-workflows.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "tsx --test tests/core/*.test.ts tests/jev/*.test.ts tests/opencode/*.test.ts",
-    "check": "npm run typecheck && npm test",
+    "check": "npm run lint && npm run format:check && npm run typecheck && npm test",
     "install:local": "npm run build && node scripts/install.mjs",
     "usage:jev": "tsx scripts/cli/jev-usage.ts",
     "workflow:check": "tsx scripts/cli/check-workflow.ts",
     "smoke:jev": "tsx scripts/smoke/smoke-jev.ts",
-    "smoke:opencode": "tsx scripts/smoke/smoke-opencode.ts"
+    "smoke:opencode": "tsx scripts/smoke/smoke-opencode.ts",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix --max-warnings 0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepare": "lefthook install"
   },
   "dependencies": {
     "@opencode-ai/plugin": "1.18.30",
@@ -24,13 +29,29 @@
     "yaml": "^2.9.1"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^24.0.0",
+    "eslint": "^10.11.0",
+    "eslint-config-prettier": "^10.1.8",
     "fast-check": "^4.10.2",
+    "globals": "^17.12.0",
+    "lefthook": "^2.1.14",
+    "lint-staged": "^16.4.0",
     "prettier": "^3.9.8",
     "tsx": "^4.20.0",
-    "typescript": "^5.9.0"
+    "typescript": "^5.9.0",
+    "typescript-eslint": "^8.70.1"
   },
   "engines": {
-    "node": ">=22"
+    "node": "^22.13.0 || >=24"
+  },
+  "lint-staged": {
+    "*.{ts,js,mjs}": [
+      "prettier --write",
+      "eslint --fix --max-warnings 0 --no-warn-ignored"
+    ],
+    "*.{json,md,yaml,yml}": [
+      "prettier --write"
+    ]
   }
 }

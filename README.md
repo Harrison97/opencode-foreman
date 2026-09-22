@@ -10,7 +10,7 @@ layer, and no software-specific behavior in the core.
 
 ## Install
 
-Requires Node.js 22+ and an installed OpenCode. This adapter is tested with
+Requires Node.js 22.13+ (22.x) or 24+ and an installed OpenCode. This adapter is tested with
 OpenCode 1.18.31 and uses plugin SDK 1.18.30.
 
 ```sh
@@ -196,6 +196,28 @@ npm run build
 npm run smoke:jev
 npm run smoke:opencode
 ```
+
+`npm ci` installs the local pre-commit hook through [Lefthook](https://lefthook.dev/usage/commands/install/).
+The hook is configured in `lefthook.yml`. On each commit,
+`lint-staged` formats staged TypeScript, JavaScript, JSON, Markdown, and YAML,
+then runs ESLint on staged code. Fixable changes are included in the commit;
+remaining lint errors block it. Partially staged files retain their unstaged edits.
+
+```sh
+npm run lint          # Check the repo with ESLint
+npm run lint:fix      # Apply safe lint fixes
+npm run format       # Format the repo with Prettier
+npm run format:check # Check formatting without changing files
+npm run check        # Lint, formatting, typecheck, and tests
+```
+
+The root `tsconfig.json` loads Node types and checks source, tests, and TypeScript
+scripts. `tsconfig.build.json` emits only `src/` into `dist/`.
+
+The hook does not run models, tests, or provider requests. Run `npm run check`
+before submitting changes. ESLint checks TypeScript syntax throughout the repo
+and adds type-aware promise checks for `src/`. Explicit `any` remains permitted
+for existing dynamic schemas, legacy migrations, and host mocks.
 
 Unit tests use deterministic external-service mocks, including dispatch failure,
 restart reconciliation, migration, cancellation, and oversized output regressions.

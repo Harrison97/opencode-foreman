@@ -4,7 +4,10 @@ import fc from "fast-check";
 import { WorkflowCompiler } from "../../src/core/workflow/compiled.js";
 import { mergeOutput } from "../../src/core/runtime/output.js";
 import { reduceRun, type Event } from "../../src/core/runtime/engine.js";
-import { invalidateCompleted, nextCapabilities } from "../../src/core/workflow/graph.js";
+import {
+  invalidateCompleted,
+  nextCapabilities,
+} from "../../src/core/workflow/graph.js";
 import { checkWorkflow } from "../../src/core/workflow/checker.js";
 import { fixture, sample } from "../support/fixtures.js";
 

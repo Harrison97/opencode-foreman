@@ -22,7 +22,7 @@ capabilities:
       additionalProperties: false
       required: [requirements]
       properties:
-        requirements: {type: array, minItems: 1, items: {type: string}}
+        requirements: { type: array, minItems: 1, items: { type: string } }
     append: [requirements]
     next:
       ready: [plan]
@@ -46,11 +46,29 @@ capabilities:
       additionalProperties: false
       required: [artifacts, acceptance, commands]
       properties:
-        artifacts: {type: array, minItems: 1, uniqueItems: true, items: {type: string, minLength: 1}}
-        acceptance: {type: array, minItems: 1, uniqueItems: true, items: {type: string, minLength: 1}}
-        commands: {type: array, minItems: 1, uniqueItems: true, items: {type: string, minLength: 1}}
+        artifacts:
+          {
+            type: array,
+            minItems: 1,
+            uniqueItems: true,
+            items: { type: string, minLength: 1 },
+          }
+        acceptance:
+          {
+            type: array,
+            minItems: 1,
+            uniqueItems: true,
+            items: { type: string, minLength: 1 },
+          }
+        commands:
+          {
+            type: array,
+            minItems: 1,
+            uniqueItems: true,
+            items: { type: string, minLength: 1 },
+          }
     append: [acceptance]
-    gate: {files: plan.artifacts}
+    gate: { files: plan.artifacts }
     next:
       ready: [build]
       incomplete: [plan, clarify]
@@ -71,8 +89,20 @@ capabilities:
       additionalProperties: false
       required: [acceptance, commands]
       properties:
-        acceptance: {type: array, minItems: 1, uniqueItems: true, items: {type: string, minLength: 1}}
-        commands: {type: array, minItems: 1, uniqueItems: true, items: {type: string, minLength: 1}}
+        acceptance:
+          {
+            type: array,
+            minItems: 1,
+            uniqueItems: true,
+            items: { type: string, minLength: 1 },
+          }
+        commands:
+          {
+            type: array,
+            minItems: 1,
+            uniqueItems: true,
+            items: { type: string, minLength: 1 },
+          }
     append: [acceptance]
     next:
       ready: [review]
@@ -93,7 +123,7 @@ capabilities:
     tools:
       allow: [read, glob, grep, bash]
       declaredChecksOnly: true
-    gate: {commands: build.commands, acceptance: build.acceptance}
+    gate: { commands: build.commands, acceptance: build.acceptance }
     next:
       ready: [deliver]
       incomplete: [build, plan]

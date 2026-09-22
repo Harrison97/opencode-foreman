@@ -1,8 +1,21 @@
 {
   "compilerOptions": {
-    "target": "ES2023", "module": "NodeNext", "moduleResolution": "NodeNext",
-    "strict": true, "declaration": true, "outDir": "dist", "rootDir": "src",
-    "skipLibCheck": true, "noUncheckedIndexedAccess": true
+    "target": "ES2023",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "skipLibCheck": true,
+    "noUncheckedIndexedAccess": true,
+    "types": ["node"],
+    "noEmit": true,
+    "allowJs": true,
+    "checkJs": false
   },
-  "include": ["src/**/*.ts"]
+  "include": [
+    "src/**/*.ts",
+    "tests/**/*.ts",
+    "scripts/**/*.ts",
+    "scripts/**/*.mjs",
+    "eslint.config.mjs"
+  ]
 }

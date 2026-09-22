@@ -20,7 +20,12 @@ async function legacy() {
   });
   await f.c.gate("s", "verified");
   const view = await f.state();
-  const { phase, version, guidance, ...fields } = view;
+  const {
+    phase: _phase,
+    version: _version,
+    guidance: _guidance,
+    ...fields
+  } = view;
   const old = {
     ...fields,
     schema: 2,
