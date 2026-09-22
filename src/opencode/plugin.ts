@@ -395,7 +395,6 @@ export const ForemanPlugin: Plugin = async ({ directory, client }) => {
       if (s) output.context.push(controller.instructions(s));
     },
     "shell.env": async (_input, output) => {
-      output.env.JEV_API_KEY = "";
       output.env.TYPESAFE_API_KEY = "";
     },
     "tool.execute.before": async (input, output) => {

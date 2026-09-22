@@ -21,8 +21,8 @@ A review can return work for repair or investigation instead of following a fixe
 
 ## Install
 
-Requires Node.js 22.13+ on 22.x or 24+, an installed OpenCode, and `JEV_API_KEY`
-in its environment (`TYPESAFE_API_KEY` is also supported). Keep keys out of YAML.
+Requires Node.js 22.13+ on 22.x or 24+, an installed OpenCode, and `TYPESAFE_API_KEY`
+in its environment. Keep keys out of YAML.
 The adapter is tested with OpenCode 1.18.31 using plugin SDK 1.18.30.
 
 From the directory where you want to keep Foreman, run:
@@ -36,7 +36,7 @@ The install command builds the plugin and registers it with OpenCode, including
 its terminal trace UI. Keep the checkout in place: the installation points to its
 compiled files. Restart OpenCode after installation.
 
-Make `JEV_API_KEY` available to the shell or launcher that starts OpenCode. Configure
+Make `TYPESAFE_API_KEY` available to the shell or launcher that starts OpenCode. Configure
 your coding model in OpenCode as usual; Foreman uses those existing credentials.
 See [UI compatibility](docs/sidebar.md) and [operations](docs/operations.md) for
 configuration, disabling, and recovery.

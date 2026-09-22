@@ -62,14 +62,11 @@ export class JevClient implements Chooser {
     context?: { sessionID: string; signal?: AbortSignal },
   ): Promise<Decision> {
     context?.signal?.throwIfAborted();
-    const key =
-      this.options.key ??
-      process.env.JEV_API_KEY ??
-      process.env.TYPESAFE_API_KEY;
+    const key = this.options.key ?? process.env.TYPESAFE_API_KEY;
 
     if (!key)
       throw new DecisionError(
-        "Jev credential unavailable. Set JEV_API_KEY and resume.",
+        "Jev credential unavailable. Set TYPESAFE_API_KEY and resume.",
       );
 
     const requestedModel =

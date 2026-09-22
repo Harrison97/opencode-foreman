@@ -103,7 +103,7 @@ test("OpenCode hooks load custom YAML, inject capabilities, collect native evide
     assert.equal((await f.state()).evidence[0]!.exit, 0);
     const env = { env: {} as Record<string, string> };
     await f.plugin["shell.env"]!({ cwd: f.root }, env);
-    assert.equal(env.env.JEV_API_KEY, "");
+    assert.equal(env.env.TYPESAFE_API_KEY, "");
   } finally {
     await f.plugin.dispose!();
   }
@@ -111,8 +111,8 @@ test("OpenCode hooks load custom YAML, inject capabilities, collect native evide
 test("accepted report drives real adapter idle continuation, routed model, usage, and no recursive admission", async () => {
   const f = await setup();
   const fetcher = globalThis.fetch;
-  const key = process.env.JEV_API_KEY;
-  process.env.JEV_API_KEY = "fake-adapter-key";
+  const key = process.env.TYPESAFE_API_KEY;
+  process.env.TYPESAFE_API_KEY = "fake-adapter-key";
   globalThis.fetch = async (_url, options) => {
     const body = JSON.parse(options!.body as string);
     const keys = Object.keys(body.questions.next.criteria);
@@ -165,16 +165,16 @@ test("accepted report drives real adapter idle continuation, routed model, usage
     assert.equal(usage.inputTokens, 45);
   } finally {
     globalThis.fetch = fetcher;
-    if (key === undefined) delete process.env.JEV_API_KEY;
-    else process.env.JEV_API_KEY = key;
+    if (key === undefined) delete process.env.TYPESAFE_API_KEY;
+    else process.env.TYPESAFE_API_KEY = key;
     await f.plugin.dispose!();
   }
 });
 test("Jev authentication failure is visible at admission and does not silently bypass", async () => {
   const f = await setup();
   const fetcher = globalThis.fetch;
-  const key = process.env.JEV_API_KEY;
-  process.env.JEV_API_KEY = "fake-adapter-key";
+  const key = process.env.TYPESAFE_API_KEY;
+  process.env.TYPESAFE_API_KEY = "fake-adapter-key";
   let requests = 0;
   globalThis.fetch = async () => {
     requests++;
@@ -202,8 +202,8 @@ test("Jev authentication failure is visible at admission and does not silently b
     assert.ok(!JSON.stringify(f.toasts).includes("private provider message"));
   } finally {
     globalThis.fetch = fetcher;
-    if (key === undefined) delete process.env.JEV_API_KEY;
-    else process.env.JEV_API_KEY = key;
+    if (key === undefined) delete process.env.TYPESAFE_API_KEY;
+    else process.env.TYPESAFE_API_KEY = key;
     await f.plugin.dispose!();
   }
 });
@@ -231,8 +231,8 @@ test("errors pause, synthetic prompts cannot resume, and native child sessions b
 test("initial user turn selects capability model and errors do not silently change models", async () => {
   const f = await setup();
   const fetcher = globalThis.fetch;
-  const key = process.env.JEV_API_KEY;
-  process.env.JEV_API_KEY = "fake-adapter-key";
+  const key = process.env.TYPESAFE_API_KEY;
+  process.env.TYPESAFE_API_KEY = "fake-adapter-key";
   globalThis.fetch = async (_url, options) => {
     const body = JSON.parse(options!.body as string);
     const keys = Object.keys(body.questions.next.criteria);
@@ -268,8 +268,8 @@ test("initial user turn selects capability model and errors do not silently chan
     });
   } finally {
     globalThis.fetch = fetcher;
-    if (key === undefined) delete process.env.JEV_API_KEY;
-    else process.env.JEV_API_KEY = key;
+    if (key === undefined) delete process.env.TYPESAFE_API_KEY;
+    else process.env.TYPESAFE_API_KEY = key;
     await f.plugin.dispose!();
   }
 });

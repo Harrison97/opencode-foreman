@@ -207,3 +207,26 @@ test("failed routing preserves report/evidence and resumes selection without rer
   assert.equal(resumed?.pending?.delivered, true);
   assert.equal(resumed?.pendingDecision, undefined);
 });
+
+test("legacy Jev environment key is not used for authentication", async () => {
+  const current = process.env.TYPESAFE_API_KEY;
+  const legacy = process.env.JEV_API_KEY;
+  delete process.env.TYPESAFE_API_KEY;
+  process.env.JEV_API_KEY = "unsupported-test-key";
+  try {
+    const client = new JevClient({
+      fetch: async () => {
+        throw new Error("must not send without TYPESAFE_API_KEY");
+      },
+    });
+    await assert.rejects(
+      client.choose({}, { a: "A" }, "pick"),
+      /Set TYPESAFE_API_KEY/,
+    );
+  } finally {
+    if (current === undefined) delete process.env.TYPESAFE_API_KEY;
+    else process.env.TYPESAFE_API_KEY = current;
+    if (legacy === undefined) delete process.env.JEV_API_KEY;
+    else process.env.JEV_API_KEY = legacy;
+  }
+});
