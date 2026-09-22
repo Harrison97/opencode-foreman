@@ -50,7 +50,7 @@ capability registry.
 | completion | Prose criteria for the agent; use gates for mechanical checks. |
 | model | Optional OpenCode `provider/model`; defaults to selected host model. |
 | outputs | JSON Schema for a ready report's `data`, inline or `{file: schemas/output.json}`. |
-| append | Output array fields merged with existing values instead of replaced. |
+| append | Output array fields unioned with this producer’s previous values before validation. |
 | dependsOn | Capabilities that must have completed successfully before selection. |
 | next | Allowed capability IDs by `ready`, `incomplete`, and `blocked` outcome. |
 | tools.allow / tools.deny | Exact native/MCP tool names; deny takes precedence. |
@@ -81,8 +81,9 @@ nonzero; warnings do not prevent loading. Checks include:
 - Missing gate output fields, incompatible string-array types, and required
   output availability on every explored entry path. Declare consumed fields in
   the producer's top-level `outputs.properties` and `outputs.required`.
-- Conflicting shared output types, invalid append fields, and a capability
-  requiring an output that its own gate prohibits it from changing.
+- Invalid append fields, self references in command/acceptance gates, and
+  references whose producer does not remain completed. Output names are scoped
+  to their producer; different capabilities may use the same name with different types.
 - Command restrictions without a checks source, or command gates without an
   allowed shell tool.
 - Warnings for allow/deny overlaps, exempt control tools, empty-array contracts,
@@ -118,8 +119,10 @@ a design,” “test persistence,” or “ask about audience” belong in the w
 `questions`. The `data` object has no built-in domain fields. Ready reports
 must satisfy the capability's JSON Schema and gates before anything is stored.
 Incomplete/blocked reports describe findings in the summary without publishing
-partial outputs. Accepted output keys update shared data; configured `append`
-array fields retain prior values.
+partial outputs. Accepted outputs live only in `capabilityOutputs[producer]`.
+Configured `append` arrays union their own previous values by JSON-value equality.
+The resulting snapshot must satisfy the schema, including `maxItems` and
+`uniqueItems`, and its artifact paths must pass file gates before it is stored.
 
 Gate references must identify their producer explicitly:
 
@@ -135,12 +138,13 @@ top-level output property, not a nested JSON path. Capability names start with a
 letter; output reference names start with a letter or underscore. Both may
 contain letters, digits, underscores, and hyphens.
 
-Accepted reports also save a per-capability output snapshot. Gates read the
+Accepted reports save a per-capability output snapshot. Gates read the
 named producer's snapshot, never the last writer of a shared-data key. A producer
 must still be completed; invalidation makes its old snapshot ineligible. A new
 ready report replaces that producer's snapshot, including removing omitted
-optional fields. Appended fields store the merged values. Shared data remains
-available for agent context.
+optional fields. Appended fields store the merged values. Agent context includes producer
+snapshots. To carry criteria between capabilities, instruct the consumer to
+include the earlier producer’s values explicitly in its own report.
 
 For variable artifact names, a producing capability can check its own submitted
 paths before its ready report is accepted:
@@ -173,13 +177,13 @@ report's `covered` array. It does not require a commands gate and does not prove
 the checklist claims are true. The old gate keys `checks` and `coverage` are
 rejected; use `commands` and `acceptance` respectively.
 
-Older run snapshots cannot reliably reconstruct who produced shared values.
-They are preserved but cannot resume through this migration. Update the YAML,
-detach with `foreman bypass:`, and start a new workflow from the existing project
-files. `gate.files` accepts a fixed path list or a qualified reference to an artifact-path array.
+Schema-2 snapshots with producer outputs and a currently valid workflow migrate
+to schema 3 with a private backup. Older snapshots without provenance cannot be
+reconstructed safely: preserve the original outside `.jev/foreman-state.json`
+and start a new workflow from the existing files. `gate.files` accepts a fixed path list or a qualified reference to an artifact-path array.
 
-An evidence-gated capability cannot edit the shared command/coverage fields it
-is checking. Exact commands must execute through native bash/shell in the
+An evidence-gated capability cannot edit the other producer’s saved command or
+coverage contract through its report. Exact commands must execute through native bash/shell in the
 project root and finish with exit code zero. The latest result takes precedence.
 Evidence from an older visit or revision cannot satisfy the gate. Commands
 themselves are trusted workflow/project code, not guaranteed read-only.

@@ -17,9 +17,10 @@ delivery. Tool filters are host hooks, not an operating-system sandbox. A comman
 may mutate files; allowing a command is not proof it is read-only.
 
 Each run snapshots its resolved workflow so config edits cannot silently change
-an in-progress contract. State version 2 is stored separately from old version 1
-state. Old state remains untouched and is not silently
-interpreted as new workflows. Explicit `foreman:` admission always works;
+an in-progress contract. State version 3 uses an explicit phase union: working,
+reported, deciding, dispatching, delivering, paused, complete, or bypassed.
+Supported version-2 state migrates with an original backup; unsupported legacy
+state fails explicitly without being overwritten. Explicit `foreman:` admission always works;
 automatic admission is decided using the workflow's own admission instructions.
 
 Jev only receives eligible choices from the configured outcome transitions and
@@ -34,3 +35,20 @@ completions. Evidence is bound to a capability visit and data revision.
 Validation: retain Jev transport/accounting tests; replace domain-coupled runtime
 tests with generic state, graph, report, evidence, pause, and adapter tests; test
 the bundled YAML and a non-software workflow through the same host adapter.
+
+The pure reducer takes validated state, an event, and explicit clock/ID values.
+The controller performs I/O and commits reductions in short transactions. Jev
+requests execute outside locks with cancellation and version checks; process
+leases prevent concurrent decision/dispatch ownership. Accepted output merging
+and gate validation precede atomic report publication.
+
+Workflow compilation caches validation and resolved output references by content
+hash. The checker and runtime share dependency eligibility and invalidation
+functions. Outputs have one source of truth: the producing capability’s snapshot.
+Routing projections are bounded and mark omissions rather than duplicating whole
+reports; full artifacts remain in state.
+
+The host adapter replays persisted unsent prompts and reconciles saved IDs
+against OpenCode history. Terminal selection is not completion: only a matching
+successful final response completes the run. Interrupted accepted responses pause
+for explicit resume rather than risking duplicate tool execution.

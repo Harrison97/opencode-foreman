@@ -1,6 +1,6 @@
 {
   "name": "opencode-jev-supervisor",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "description": "Durable professional workflow supervision for OpenCode with Jev Choice",
@@ -25,6 +25,8 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "fast-check": "^4.10.2",
+    "prettier": "^3.9.8",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0"
   },

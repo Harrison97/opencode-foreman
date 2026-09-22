@@ -62,7 +62,9 @@ capabilities:
       native tools. If fixing failed checks, make focused repairs without
       weakening the acceptance contract. If no design exists, document a
       concise task-specific design under designs/ first. Record finite commands and acceptance labels in
-      data, preserving existing criteria. Report ready when review can begin.
+      data. Explicitly carry forward plan.acceptance when available, and retain
+      your previous build.acceptance criteria when repairing. Outputs are scoped
+      to their producing capability. Report ready when review can begin.
     completion: Implementation and a terminating check plan are ready.
     outputs:
       type: object

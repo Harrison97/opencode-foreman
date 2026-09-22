@@ -40,10 +40,10 @@ foreman: Build a local issue tracker with persistent storage, tests, and setup i
 ```
 
 - `foreman bypass: ...` uses normal OpenCode and detaches supervision.
-- `foreman resume` attaches the latest unfinished run to the current session.
+- `foreman resume` resumes this run or attaches the latest paused run to the current session.
 - `stop`, `pause`, or `cancel` pauses an active run.
 - Reply normally to answer a question and resume.
-- `jev_status` shows the current capability, data, history, evidence, and models.
+- `jev_status` shows the current capability, producer outputs, history, evidence, and models.
 
 The historical `jev:`, `jev bypass:`, and `jev resume` prefixes also work.
 
@@ -95,7 +95,9 @@ enforces configured tool-name lists, validates declared JSON outputs, checks
 required project files, and gates on fresh native exit codes and exact coverage
 labels when configured. Jev can choose only eligible transitions.
 
-Ready reports are atomic. Correcting a rejected coverage report does not rerun
+Ready reports validate the final merged output and artifact paths before committing.
+Append fields use JSON-value uniqueness within their own producer snapshot.
+There is no shared, last-writer-wins output object. Ready reports are atomic. Correcting a rejected coverage report does not rerun
 fresh checks. Failed work follows the workflow's incomplete/blocked transitions.
 Jev's highest-ranked legal choice is accepted regardless of its score. Scores
 and distributions are recorded for inspection, not used as a confidence cutoff.
@@ -103,13 +105,22 @@ Transient request failures retry up to five times, then pause visibly.
 Three consecutive repeats or the work-unit limit pause for guidance.
 
 Human pause and completion are runtime statuses, not mandatory capabilities.
-The workflow chooses which capability delivers its final response.
+The workflow chooses which capability delivers its final response. A run becomes
+complete only after OpenCode records a successful response to that delivery.
+Dispatch failures pause visibly and preserve the pending work.
 
 State lives in private atomic `.jev/foreman-state.json` files. Each run pins
 the fully resolved workflow in its state, so editing configuration affects new
 runs, not a running contract. Evidence is bound to a capability visit and state
 revision. Re-entering a capability invalidates its completion and dependent
-completions.
+completions. Persisted decisions and undelivered prompts recover on host startup;
+saved message IDs reconcile prompts already received by OpenCode. An accepted
+prompt with an interrupted response may need `foreman resume`; Foreman does not
+blindly repeat tools. New guidance invalidates accepted work before reconsideration.
+
+Jev requests run outside state locks and can be cancelled. Versioned decisions
+discard late results. Routing uses a bounded, explicitly truncated projection of
+state; full outputs remain durable and available to the working agent.
 
 Tool restrictions are host-level controls, not an OS sandbox. A permitted shell
 command or MCP tool can modify files. A passing check proves only what that
@@ -135,12 +146,12 @@ Environment options:
 - `JEV_MODEL`: Jev model, default `jev-latest`.
 - `JEV_MAX_TURNS`: automatic work-unit limit, default 40; not a spending limit.
 
-## Version 0.3 migration
+## Version 0.4 migration
 
 Current workflows no longer support `fallback` fields or a confidence threshold.
 Remove admission/capability `fallback` fields from custom YAML; the checker
-rejects them. `JEV_CONFIDENCE_THRESHOLD` no longer affects routing. Existing run
-snapshots keep their data, but routing never executes old fallback definitions.
+rejects them. `JEV_CONFIDENCE_THRESHOLD` no longer affects routing. Pinned snapshots containing removed fields cannot resume until migrated to the
+current workflow contract; Foreman fails explicitly without overwriting them.
 
 Network failures, timeouts, HTTP 408/429/5xx, and malformed decisions get up to
 five retries after the initial attempt (six attempts total). Backoff is 1, 2,
@@ -160,10 +171,16 @@ The old `jev.workflow.json` configured only models. It is rejected with an
 explicit migration message; convert to a full YAML workflow and put model
 overrides on capabilities. If both files exist, YAML takes precedence.
 
-Old `.jev/state.json` files are preserved. Version 0.3
-starts separate version-2 state rather than silently interpreting old
-software-specific state as an arbitrary workflow. Resume old work with 0.2.1,
-or start a new Foreman run using the existing project files.
+Version 0.4 stores explicit runtime phases in schema-3 state. Supported schema-2
+runs with producer snapshots migrate automatically on the next write; the
+original is backed up privately as `.jev/foreman-state.v2.json`. No shared output
+object is migrated. Append now preserves only that capability’s own previous
+values: instructions must explicitly carry forward another producer’s criteria.
+
+Old `.jev/state.json` files remain untouched. Unsupported workflows or snapshots
+without output provenance fail explicitly; preserve the original state file
+outside `.jev/foreman-state.json` and start a new run using existing project
+files, or resume with the matching older Foreman version.
 
 ## Development and tests
 
@@ -174,12 +191,19 @@ npm run smoke:jev
 npm run smoke:opencode
 ```
 
-Unit tests use deterministic external-service mocks. The OpenCode smoke test
+Unit tests use deterministic external-service mocks, including dispatch failure,
+restart reconciliation, migration, cancellation, and oversized output regressions.
+Seeded property tests generate output merges, event traces, and dependency graphs. The OpenCode smoke test
 uses real models and Jev in disposable projects: a non-software workflow with
 an injected one-time failure, the default software workflow, and human
 pause/resume across a host restart. It consumes provider resources; set
 `JEV_SMOKE_MODEL` to an available model if needed. Results and redacted
 transcripts are retained under the printed temporary directory and `artifacts/`.
+
+The core separates a pure event reducer (`engine.ts`) from the I/O controller,
+compiles and caches validated workflow contracts, and shares graph semantics
+between the runtime and checker. Persisted state has one discriminated phase
+and one producer-scoped output store.
 
 Core modules live under `src/core`; Jev transport/accounting under `src/jev`;
 the host adapter under `src/opencode`; the default workflow under
