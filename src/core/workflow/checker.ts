@@ -90,7 +90,7 @@ function checkCapabilityContracts(
         );
 
     for (const tool of capability.tools?.deny ?? [])
-      if (["jev_status", "jev_report"].includes(tool))
+      if (["foreman_status", "foreman_report"].includes(tool))
         emit(
           "warning",
           `${path}.tools.deny`,
@@ -371,7 +371,10 @@ export function checkHost(
       ...(capability.tools?.allow ?? []),
       ...(capability.tools?.deny ?? []),
     ]))
-      if (!tools.includes(name) && !["jev_status", "jev_report"].includes(name))
+      if (
+        !tools.includes(name) &&
+        !["foreman_status", "foreman_report"].includes(name)
+      )
         diagnostics.push({
           severity: "warning",
           path: `capabilities.${id}.tools`,

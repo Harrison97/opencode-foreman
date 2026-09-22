@@ -1,5 +1,18 @@
 import { viewState, type WorkflowState, type WorkflowView } from "../types.js";
 import { sanitize } from "../security.js";
+import { outputReference } from "../workflow/references.js";
+import { resolvedOutput } from "./output.js";
+
+export function gateInputs(state: WorkflowState) {
+  const gate = state.workflow.capabilities[state.capability]!.gate ?? {};
+  return Object.fromEntries(
+    Object.entries(gate).map(([key, value]) => {
+      const ref =
+        typeof value === "string" ? outputReference(value) : undefined;
+      return [key, ref ? resolvedOutput(state, ref) : value];
+    }),
+  );
+}
 
 export function workflowInstructions(state: WorkflowState) {
   const capability = state.workflow.capabilities[state.capability]!;
@@ -15,15 +28,19 @@ export function workflowInstructions(state: WorkflowState) {
     "Output JSON schema: " + JSON.stringify(capability.outputs ?? null),
     "Tool rules: " + JSON.stringify(capability.tools ?? {}),
     "Required gates: " + JSON.stringify(capability.gate ?? {}),
+    "Required gate inputs: " + JSON.stringify(gateInputs(state)),
+    capability.outputs
+      ? "Publish only this capability’s declared data."
+      : "This capability declares no output data. Omit data from foreman_report; a report is still required. This does not mean the workflow is complete.",
     taskInstructions(view.status),
-    "Outputs are scoped by producer. Reference capabilityOutputs[capability][field]. Carry forward earlier criteria explicitly when producing your own contract. Never edit Foreman state/config to bypass gates or expose credentials.",
+    "Use foreman_status with producer to read earlier outputs as needed. Outputs are scoped by producer. Reference capabilityOutputs[capability][field]. Carry forward earlier criteria explicitly when producing your own contract. Never edit Foreman state/config to bypass gates or expose credentials.",
     JSON.stringify(
       sanitize({
         goal: state.goal,
         guidance: state.guidance,
-        capabilityOutputs: state.capabilityOutputs,
+        availableOutputs: Object.keys(state.capabilityOutputs),
         completed: state.completed,
-        progress: state.progress.slice(-8),
+        progress: state.progress.slice(-3),
         questions: view.questions,
         pauseReason: view.pauseReason,
         reportAccepted: state.phase.kind === "reported",
@@ -41,5 +58,5 @@ function taskInstructions(status: WorkflowView["status"]): string {
     return "Deliver this capability’s final response. Do not use tools.";
   }
 
-  return "Perform only the current capability. Call jev_report with summary, outcome and workflow-defined data. Incomplete/blocked reports cannot publish outputs. Questions are essential human decisions only. Correct rejected reports; finish your response after acceptance. Foreman chooses the next capability.";
+  return "Perform only the current capability. Call foreman_report with summary, outcome and workflow-defined data. Incomplete/blocked reports cannot publish outputs. Questions are essential human decisions only. Correct rejected reports; finish your response after acceptance. Foreman chooses the next capability.";
 }

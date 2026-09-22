@@ -15,7 +15,7 @@ export interface TransitionContext {
 
 export type Event =
   | { type: "report"; report: Report; output?: Record<string, unknown> }
-  | { type: "idle"; messageID: string; maxTurns: number }
+  | { type: "idle"; messageID: string; maxTurns?: number }
   | { type: "decision"; id: string; version: number; answer: Decision }
   | { type: "decisionFailed"; id: string; version: number; reason: string }
   | { type: "pause"; reason: string }
@@ -69,6 +69,7 @@ function enter(
       : "Terminal delivery is the only eligible transition",
   });
   state.capability = id;
+  state.reportRetries = 0;
   state.epoch++;
   invalidate(state, id);
   state.stalls = previous === id ? state.stalls + 1 : 0;
@@ -78,7 +79,7 @@ function enter(
     terminal,
     text: terminal
       ? "[Foreman] Deliver the final response following this capability. No more tools."
-      : "[Foreman] Continue the current goal in the selected capability. Submit jev_report and finish the response.",
+      : "[Foreman] Continue the current goal in the selected capability. Submit foreman_report and finish the response.",
   };
   state.internalIDs = [...state.internalIDs, delivery.id].slice(-200);
   state.phase = { kind: "dispatching", delivery };
@@ -148,6 +149,8 @@ function onReport(
   if (phase.kind !== "working")
     throw new Error("No working capability or report already accepted");
 
+  state.reportRetries = 0;
+
   if (event.output) {
     state.capabilityOutputs[state.capability] = event.output;
     state.revision++;
@@ -184,7 +187,7 @@ function onIdle(
   state.consumedMessage = event.messageID;
   state.turns++;
 
-  if (state.turns >= event.maxTurns) {
+  if (event.maxTurns !== undefined && state.turns >= event.maxTurns) {
     pause(state, phase, "Automatic work-unit limit reached; reply to continue");
 
     return true;
@@ -198,7 +201,30 @@ function onIdle(
     return true;
   }
 
-  const outcome = report?.outcome ?? "incomplete";
+  if (!report) {
+    const attempts = state.reportRetries ?? 0;
+    if (attempts >= 3) {
+      pause(
+        state,
+        phase,
+        "No accepted report after three retries in " +
+          state.capability +
+          "; reply to resume this capability",
+      );
+    } else {
+      state.reportRetries = attempts + 1;
+      onQueue(state, context);
+      if (state.phase.kind === "dispatching") {
+        state.phase.delivery.text =
+          "[Foreman] No report was accepted. Continue capability " +
+          state.capability +
+          ". Read the current assignment below, correct any rejected report, and submit foreman_report. Prior capability completion does not complete this one.";
+      }
+    }
+    return true;
+  }
+
+  const outcome = report.outcome;
 
   if (outcome === "ready") state.completed[state.capability] = state.epoch;
   else invalidate(state, state.capability);
@@ -339,6 +365,7 @@ function onResume(
 
   state.turns = 0;
   state.stalls = 0;
+  state.reportRetries = 0;
 
   if (
     resume.kind === "deciding" &&

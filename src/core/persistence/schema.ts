@@ -144,6 +144,7 @@ const run = obj(
     consumedMessage: str,
     turns: int,
     stalls: int,
+    reportRetries: int,
     model,
     agent: str,
     selectedModel: model,
@@ -175,7 +176,7 @@ function migrate(old: any): Database {
   for (const [id, s] of Object.entries(old.workflows) as [string, any][]) {
     if (!s.capabilityOutputs)
       throw new Error(
-        "Legacy state lacks output provenance; preserve it outside .jev/foreman-state.json before starting a new run.",
+        "Legacy state lacks output provenance; preserve it outside .foreman/foreman-state.json before starting a new run.",
       );
 
     const workflow = parseWorkflow(s.workflow);
@@ -203,7 +204,7 @@ function migrate(old: any): Database {
             s.pendingDecision === "admission"
               ? [
                   ...workflow.admission.entries,
-                  ...(/^\s*(foreman|jev):/i.test(s.goal) ? [] : ["BYPASS"]),
+                  ...(/^\s*foreman:/i.test(s.goal) ? [] : ["BYPASS"]),
                 ]
               : nextCapabilities(
                   workflow,

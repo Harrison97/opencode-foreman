@@ -6,7 +6,9 @@ import { checkWorkflow, checkHost } from "../../src/core/workflow/checker.js";
 try {
   const args = process.argv.slice(2);
   const file =
-    args[0] && !args[0].startsWith("--") ? args.shift()! : "jev.workflow.yaml";
+    args[0] && !args[0].startsWith("--")
+      ? args.shift()!
+      : "foreman.workflow.yaml";
   let host: string | undefined;
   if (args[0] === "--host" && args[1] && args.length === 2) host = args[1];
   else if (args.length)

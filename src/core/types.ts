@@ -123,6 +123,7 @@ export interface WorkflowState {
   consumedMessage?: string;
   turns: number;
   stalls: number;
+  reportRetries?: number;
   model?: ModelRef;
   agent?: string;
   selectedModel?: ModelRef;

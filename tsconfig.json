@@ -9,13 +9,16 @@
     "types": ["node"],
     "noEmit": true,
     "allowJs": true,
-    "checkJs": false
+    "checkJs": false,
+    "jsx": "preserve",
+    "jsxImportSource": "@opentui/solid"
   },
   "include": [
     "src/**/*.ts",
     "tests/**/*.ts",
     "scripts/**/*.ts",
     "scripts/**/*.mjs",
-    "eslint.config.mjs"
+    "eslint.config.mjs",
+    "src/**/*.tsx"
   ]
 }

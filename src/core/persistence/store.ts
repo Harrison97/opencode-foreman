@@ -22,7 +22,7 @@ export class StateStore {
   private queue: Promise<unknown> = Promise.resolve();
 
   constructor(root: string) {
-    this.dir = join(root, ".jev");
+    this.dir = join(root, ".foreman");
     this.path = join(this.dir, "foreman-state.json");
   }
 
@@ -72,7 +72,7 @@ export class StateStore {
 
           if (Date.now() > deadline)
             throw new Error(
-              "Jev state is busy; retry after the other host finishes",
+              "Foreman state is busy; retry after the other host finishes",
               { cause: e },
             );
 

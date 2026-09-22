@@ -14,7 +14,7 @@ test("bundled software workflow uses the same parser and has one capability laye
   const w = await loadWorkflowFile(
     resolve("src/workflows/software-engineer/workflow.yaml"),
   );
-  assert.equal(w.name, "software-engineer");
+  assert.equal(w.name, "Foreman");
   assert.equal(w.capabilities.review!.gate?.commands, "build.commands");
   assert.equal(w.capabilities.review!.model, undefined);
   assert.equal(Object.hasOwn(w, "stages"), false);
@@ -67,7 +67,7 @@ test("local workflow repo imports capabilities, markdown instructions and JSON s
   w.imports = ["library.yaml"];
   await writeFile(join(repo, "foreman.yaml"), YAML.stringify(w));
   await writeFile(
-    join(project, "jev.workflow.yaml"),
+    join(project, "foreman.workflow.yaml"),
     YAML.stringify({ source: "../repo/foreman.yaml" }),
   );
   const loaded = await loadWorkflowConfig(project);
@@ -82,7 +82,7 @@ test("local workflow repo imports capabilities, markdown instructions and JSON s
 });
 test("invalid YAML, conflicting imports, symlink escapes, and missing sources fail explicitly", async () => {
   const root = await mkdtemp(join(tmpdir(), "foreman-invalid-"));
-  const file = join(root, "jev.workflow.yaml");
+  const file = join(root, "foreman.workflow.yaml");
   await writeFile(file, "name: first\nname: second\n");
   await assert.rejects(loadWorkflowConfig(root), /Invalid workflow YAML/);
   await writeFile(file, "source: missing.yaml\n");
@@ -106,14 +106,14 @@ test("invalid YAML, conflicting imports, symlink escapes, and missing sources fa
   await writeFile(file, YAML.stringify(w));
   await assert.rejects(loadWorkflowConfig(root), /escapes package/);
 });
-test("legacy JSON is rejected explicitly and YAML takes precedence", async () => {
+test("only the repo-level Foreman YAML config is loaded", async () => {
   const root = await mkdtemp(join(tmpdir(), "foreman-migration-"));
   await writeFile(
-    join(root, "jev.workflow.json"),
+    join(root, "jev.workflow.yaml"),
     JSON.stringify({ stages: { VERIFY: { model: "provider/model" } } }),
   );
-  await assert.rejects(loadWorkflowConfig(root), /Legacy.*Migrate/);
-  await writeFile(join(root, "jev.workflow.yaml"), YAML.stringify(sample));
+  assert.equal((await loadWorkflowConfig(root)).name, "Foreman");
+  await writeFile(join(root, "foreman.workflow.yaml"), YAML.stringify(sample));
   assert.equal((await loadWorkflowConfig(root)).name, "editorial");
 });
 test("required artifacts must exist; append-only contract labels survive repair", async () => {

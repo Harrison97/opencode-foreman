@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFile, writeFile, unlink } from "node:fs/promises";
+import { readFile, writeFile, unlink, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { Controller } from "../../src/core/runtime/controller.js";
 import { StateStore } from "../../src/core/persistence/store.js";
@@ -246,4 +246,67 @@ test("routing budgets account for JSON escaping in workflow text", async () => {
   );
   assert.equal(s?.phase.kind, "working");
   assert.ok(size > 0 && size < 28000);
+});
+
+test("missing reports retry the same capability without routing or discarding fresh evidence", async () => {
+  const f = await fixture();
+  await advance(f.c);
+  await f.c.evidence("s", {
+    callID: "fresh",
+    command: "node --test",
+    exit: 0,
+    output: "pass",
+  });
+  const before = await f.state();
+  await assert.rejects(f.c.report("s", ready), /no declared output schema/);
+  const retry = (await f.c.gate("s", "missing-1"))!;
+  assert.equal(retry.capability, "proof");
+  assert.equal(retry.reportRetries, 1);
+  assert.equal(retry.epoch, before.epoch);
+  assert.deepEqual(retry.history, before.history);
+  assert.deepEqual(retry.evidence, before.evidence);
+  await f.c.received("s", retry.pending!.id);
+  await f.c.report("s", {
+    summary: "Actual proof completed",
+    outcome: "ready",
+    covered: ready.data.labels,
+  });
+  assert.equal((await f.c.gate("s", "corrected"))?.capability, "publish");
+});
+
+test("report retries survive restart, stop explicitly, and resume without a planning loop", async () => {
+  const f = await fixture();
+  for (let i = 0; i < 3; i++) {
+    const next = (await f.c.gate("s", "missing-" + i))!;
+    assert.equal(next.reportRetries, i + 1);
+    await f.c.received("s", next.pending!.id);
+  }
+  const restarted = new Controller(new StateStore(f.root), chooser(), {
+    workflow: sample,
+  });
+  const stopped = (await restarted.gate("s", "exhausted"))!;
+  assert.equal(stopped.status, "paused");
+  assert.match(
+    stopped.pauseReason!,
+    /No accepted report after three retries in draft/,
+  );
+  assert.equal(stopped.history.length, 1);
+  await restarted.admit("s", "continue", "user-resumes");
+  assert.equal((await restarted.get("s"))!.reportRetries, 0);
+  await restarted.report("s", ready);
+  assert.equal((await restarted.gate("s", "reported"))?.capability, "proof");
+});
+
+test("Foreman state does not read or alter the former project directory", async () => {
+  const f = await fixture();
+  const legacy = join(f.root, ".jev");
+  await mkdir(legacy);
+  const oldPath = join(legacy, "foreman-state.json");
+  await writeFile(oldPath, "not Foreman state");
+  const store = new StateStore(f.root);
+  assert.equal(store.path, join(f.root, ".foreman", "foreman-state.json"));
+  assert.equal((await store.read()).active, (await f.state()).id);
+  await unlink(store.path);
+  assert.deepEqual(await store.read(), { schema: 3, workflows: {} });
+  assert.equal(await readFile(oldPath, "utf8"), "not Foreman state");
 });

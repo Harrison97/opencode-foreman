@@ -5,7 +5,7 @@ instructions, output schemas, dependencies, transitions, model selections, tool
 restrictions, and completion gates. The engine has no domain-specific names,
 admission classifier, report fields, repair categories, or stage kinds.
 
-`jev.workflow.yaml` is either a complete workflow or a local `source` reference
+`foreman.workflow.yaml` is either a complete workflow or a local `source` reference
 to one. The bundled software-engineer YAML uses the same parser and engine.
 Workflow repositories can be cloned and referenced locally; automatic remote
 download and package dependency installation are out of scope for this change.

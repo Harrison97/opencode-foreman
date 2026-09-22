@@ -99,7 +99,7 @@ test("producer-scoped output types are independent; tool overlap and intentional
   };
   assert.doesNotThrow(() => parseWorkflow(w));
   delete w.capabilities.proof!.outputs;
-  w.capabilities.proof!.tools!.deny = ["read", "jev_report"];
+  w.capabilities.proof!.tools!.deny = ["read", "foreman_report"];
   w.capabilities.draft!.next!.incomplete = ["publish"];
   assert.doesNotThrow(() => parseWorkflow(w));
   const warnings = checkWorkflow(w);

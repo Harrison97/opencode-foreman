@@ -20,7 +20,7 @@ npm run install:local
 ```
 
 Restart OpenCode. Installation writes an import shim to
-`~/.config/opencode/plugins/jev-supervisor.js` (honoring `XDG_CONFIG_HOME`).
+`~/.config/opencode/plugins/foreman.js` (honoring `XDG_CONFIG_HOME`).
 It points at this checkout's compiled output. Remove that shim to uninstall.
 Model credentials stay in OpenCode. Jev uses `JEV_API_KEY`, falling back to
 `TYPESAFE_API_KEY`; neither is written to workflow configuration.
@@ -28,9 +28,10 @@ Model credentials stay in OpenCode. Jev uses `JEV_API_KEY`, falling back to
 ## Use
 
 Without project configuration, Foreman loads the bundled
-[software-engineer workflow](src/workflows/software-engineer/workflow.yaml):
-clarify, plan, build, review, deliver. These names and behaviors exist only in
-YAML. Jev can enter appropriate capabilities and route repairs backward.
+[Foreman engineering workflow](src/workflows/software-engineer/workflow.yaml):
+interview, investigate, design, plan, build, review, checkpoint, release, verify,
+deliver. These names and behaviors exist only in YAML. Jev admits substantial
+work to interview and routes later work and repairs among eligible capabilities.
 
 Ask for work normally. The workflow's admission instructions tell Jev when to
 bypass supervision. Prefix a request with `foreman:` to explicitly opt in:
@@ -43,23 +44,23 @@ foreman: Build a local issue tracker with persistent storage, tests, and setup i
 - `foreman resume` resumes this run or attaches the latest paused run to the current session.
 - `stop`, `pause`, or `cancel` pauses an active run.
 - Reply normally to answer a question and resume.
-- `jev_status` shows the current capability, producer outputs, history, evidence, and models.
+- `foreman_status` shows the current assignment and gate inputs; pass `producer` to read saved outputs.
+- The [terminal sidebar](docs/sidebar.md) shows a persistent capability trace;
+  `/foreman-trace` opens the full history. Requires OpenCode 1.18.30+ (1.x).
 
 These prefixes are messages typed into OpenCode chat, not terminal commands.
 Continuing the same conversation resumes its paused workflow; you do not need
 to type `foreman resume`. Use that message to retry without adding instructions,
 or to attach the latest paused workflow in a new conversation in the same project.
-`jev_status` is an agent tool, not a terminal command.
-
-The historical `jev:`, `jev bypass:`, and `jev resume` prefixes also work.
+`foreman_status` is an agent tool, not a terminal command.
 
 ## Define a workflow
 
-Put a complete workflow in `jev.workflow.yaml` at the project directory where
+Put a complete workflow in `foreman.workflow.yaml` at the project directory where
 OpenCode starts. To customize the default:
 
 ```sh
-cp /path/to/foreman/src/workflows/software-engineer/workflow.yaml ./jev.workflow.yaml
+cp /path/to/foreman/src/workflows/software-engineer/workflow.yaml ./foreman.workflow.yaml
 ```
 
 Or reference a workflow from another local or cloned repository:
@@ -74,7 +75,7 @@ package. See [the configuration guide](docs/workflows.md).
 Validate a definition without running a model:
 
 ```sh
-npm run workflow:check -- /path/to/jev.workflow.yaml
+npm run workflow:check -- /path/to/foreman.workflow.yaml
 ```
 
 The checker rejects broken references, missing output contracts, incompatible
@@ -115,7 +116,11 @@ The workflow chooses which capability delivers its final response. A run becomes
 complete only after OpenCode records a successful response to that delivery.
 Dispatch failures pause visibly and preserve the pending work.
 
-State lives in private atomic `.jev/foreman-state.json` files. Each run pins
+Foreman reads only `foreman.workflow.yaml` and `.foreman/`; old Jev-named config,
+state directories, tool names, command prefixes and plugin settings are not supported.
+Existing projects are not automatically moved or rewritten.
+
+State lives in private atomic `.foreman/foreman-state.json` files. Each run pins
 the fully resolved workflow in its state, so editing configuration affects new
 runs, not a running contract. Evidence is bound to a capability visit and state
 revision. Re-entering a capability invalidates its completion and dependent
@@ -141,22 +146,23 @@ npm run usage:jev -- /path/to/project
 npm run usage:jev -- /path/to/project SESSION_ID
 ```
 
-The private `.jev/usage.jsonl` ledger records each real Jev request, model,
+The private `.foreman/usage.jsonl` ledger records each real Jev request, model,
 status, and returned input/output tokens. Pending and unknown usage remain
 visible. Coding-model usage remains in OpenCode transcripts. No prices are
 assumed.
 
 Environment options:
 
-- `JEV_DISABLED=1`: disable the plugin.
+- `FOREMAN_DISABLED=1`: disable the plugin.
 - `JEV_MODEL`: Jev model, default `jev-latest`.
-- `JEV_MAX_TURNS`: automatic work-unit limit, default 40; not a spending limit.
+- `FOREMAN_MAX_TURNS`: optional positive-integer work-unit cap. Unset or `unlimited`
+  means no work-unit limit (the default); not a spending limit.
 
 ## Version 0.4 migration
 
 Current workflows no longer support `fallback` fields or a confidence threshold.
 Remove admission/capability `fallback` fields from custom YAML; the checker
-rejects them. `JEV_CONFIDENCE_THRESHOLD` no longer affects routing. Pinned snapshots containing removed fields cannot resume until migrated to the
+rejects them. Pinned snapshots containing removed fields cannot resume until migrated to the
 current workflow contract; Foreman fails explicitly without overwriting them.
 
 Network failures, timeouts, HTTP 408/429/5xx, and malformed decisions get up to
@@ -173,19 +179,15 @@ silently bypassing supervision. Every HTTP attempt has its own usage record,
 linked by decision ID and attempt number; successful records include the choice,
 score, and probability distribution. Unknown token usage remains unknown.
 
-The old `jev.workflow.json` configured only models. It is rejected with an
-explicit migration message; convert to a full YAML workflow and put model
-overrides on capabilities. If both files exist, YAML takes precedence.
-
 Version 0.4 stores explicit runtime phases in schema-3 state. Supported schema-2
 runs with producer snapshots migrate automatically on the next write; the
-original is backed up privately as `.jev/foreman-state.v2.json`. No shared output
+original is backed up privately as `.foreman/foreman-state.v2.json`. No shared output
 object is migrated. Append now preserves only that capability’s own previous
 values: instructions must explicitly carry forward another producer’s criteria.
 
-Old `.jev/state.json` files remain untouched. Unsupported workflows or snapshots
+Old `.foreman/state.json` files remain untouched. Unsupported workflows or snapshots
 without output provenance fail explicitly; preserve the original state file
-outside `.jev/foreman-state.json` and start a new run using existing project
+outside `.foreman/foreman-state.json` and start a new run using existing project
 files, or resume with the matching older Foreman version.
 
 ## Development and tests
@@ -225,7 +227,7 @@ Seeded property tests generate output merges, event traces, and dependency graph
 uses real models and Jev in disposable projects: a non-software workflow with
 an injected one-time failure, the default software workflow, and human
 pause/resume across a host restart. It consumes provider resources; set
-`JEV_SMOKE_MODEL` to an available model if needed. Results and redacted
+`FOREMAN_SMOKE_MODEL` to an available model if needed. Results and redacted
 transcripts are retained under the printed temporary directory and `artifacts/`.
 
 The core keeps workflow transitions (`src/core/runtime/engine.ts`) separate from the controller’s network and filesystem work,
@@ -246,7 +248,7 @@ src/
     security.ts     Credential redaction
   jev/              Jev transport and usage accounting
   opencode/         OpenCode configuration and plugin hooks
-  workflows/        Bundled software-engineer YAML
+  workflows/        Bundled Foreman engineering YAML
 scripts/
   build/            Clean output and copy workflow assets
   cli/              Workflow checker and usage reporting
@@ -266,3 +268,7 @@ See the [architecture overview](docs/architecture/overview.md) and
 [runtime design](docs/architecture/runtime.md).
 
 A configurable workflow does not itself guarantee better quality or lower cost.
+
+The default [Foreman workflow guide](docs/foreman.md) explains the interview,
+recursive campaign planning, bounded boxes, recovery, model configuration and
+the distinction between runtime gates and agent-managed campaign policies.

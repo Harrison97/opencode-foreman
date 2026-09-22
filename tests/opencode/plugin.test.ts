@@ -4,7 +4,7 @@ import { writeFile, mkdtemp, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import YAML from "yaml";
-import { JevSupervisor } from "../../src/opencode/plugin.js";
+import { ForemanPlugin } from "../../src/opencode/plugin.js";
 import { UsageLog, summarizeUsage } from "../../src/jev/usage.js";
 import { fixture, sample, ready } from "../support/fixtures.js";
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -12,11 +12,11 @@ async function setup() {
   const w = structuredClone(sample);
   w.capabilities.proof!.model = "test/reviewer";
   const f = await fixture(w);
-  await writeFile(join(f.root, "jev.workflow.yaml"), YAML.stringify(w));
+  await writeFile(join(f.root, "foreman.workflow.yaml"), YAML.stringify(w));
   const prompts: any[] = [];
   const logs: any[] = [];
   const toasts: any[] = [];
-  const plugin = await JevSupervisor({
+  const plugin = await ForemanPlugin({
     directory: f.root,
     client: {
       app: {
@@ -62,6 +62,10 @@ async function setup() {
 test("OpenCode hooks load custom YAML, inject capabilities, collect native evidence and strip keys", async () => {
   const f = await setup();
   try {
+    assert.deepEqual(Object.keys(f.plugin.tool!).sort(), [
+      "foreman_report",
+      "foreman_status",
+    ]);
     const system = { system: [] as string[] };
     await f.plugin["experimental.chat.system.transform"]!(
       { sessionID: "s" } as any,
@@ -128,7 +132,7 @@ test("accepted report drives real adapter idle continuation, routed model, usage
     });
   };
   try {
-    await f.plugin.tool!.jev_report!.execute(
+    await f.plugin.tool!.foreman_report!.execute(
       ready as any,
       { sessionID: "s" } as any,
     );
@@ -143,6 +147,9 @@ test("accepted report drives real adapter idle continuation, routed model, usage
       modelID: "reviewer",
     });
     assert.equal(f.prompts[0].body.parts[0].synthetic, true);
+    assert.match(f.prompts[0].body.parts[0].text, /CURRENT CAPABILITY: proof/);
+    assert.match(f.prompts[0].body.parts[0].text, /node --test/);
+    assert.match(f.prompts[0].body.parts[0].text, /Omit data/);
     await f.plugin["chat.message"]!({ sessionID: "s" }, {
       message: { id: f.prompts[0].body.messageID },
       parts: f.prompts[0].body.parts,
@@ -268,13 +275,57 @@ test("initial user turn selects capability model and errors do not silently chan
 });
 test("disabled plugin neither loads config nor records requests", async () => {
   const root = await mkdtemp(join(tmpdir(), "foreman-disabled-"));
-  const old = process.env.JEV_DISABLED;
-  process.env.JEV_DISABLED = "1";
+  const old = process.env.FOREMAN_DISABLED;
+  process.env.FOREMAN_DISABLED = "1";
   try {
-    assert.deepEqual(await JevSupervisor({ directory: root } as any), {});
+    assert.deepEqual(await ForemanPlugin({ directory: root } as any), {});
     await assert.rejects(stat(new UsageLog(root).path), { code: "ENOENT" });
   } finally {
-    if (old === undefined) delete process.env.JEV_DISABLED;
-    else process.env.JEV_DISABLED = old;
+    if (old === undefined) delete process.env.FOREMAN_DISABLED;
+    else process.env.FOREMAN_DISABLED = old;
+  }
+});
+
+test("status stays focused and rejected reports explain the active contract", async () => {
+  const f = await setup();
+  try {
+    await f.c.report("s", ready);
+    const next = (await f.c.gate("s", "draft"))!;
+    await f.c.received("s", next.pending!.id);
+    await f.store.transaction((db) => {
+      db.workflows[db.active!]!.evidence = Array.from(
+        { length: 100 },
+        (_, i) => ({
+          callID: String(i),
+          command: "node --test",
+          exit: 0,
+          output: "x".repeat(1000),
+          at: new Date().toISOString(),
+          revision: 0,
+          epoch: 0,
+        }),
+      );
+    });
+    const status = await f.plugin.tool!.foreman_status!.execute({}, {
+      sessionID: "s",
+    } as any);
+    assert.ok(typeof status === "string");
+    assert.match(status, /CURRENT CAPABILITY: proof/);
+    assert.match(status, /Correct tone/);
+    assert.ok(status.length < 10000);
+    const result = await f.plugin.tool!.foreman_status!.execute(
+      { producer: "draft" },
+      { sessionID: "s" } as any,
+    );
+    assert.ok(typeof result === "string");
+    const output = JSON.parse(result);
+    assert.deepEqual(output.output, ready.data);
+    await assert.rejects(
+      f.plugin.tool!.foreman_report!.execute(ready, { sessionID: "s" } as any),
+      /CURRENT CAPABILITY: proof/,
+    );
+    assert.equal((await f.state()).phase.kind, "working");
+  } finally {
+    await f.plugin.dispose!();
   }
 });

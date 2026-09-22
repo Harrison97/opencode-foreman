@@ -1,8 +1,11 @@
 # Workflow configuration
 
-Foreman loads `jev.workflow.yaml`. YAML is a serialization format; the contents
+Foreman loads `foreman.workflow.yaml`. YAML is a serialization format; the contents
 must follow Foreman's versioned schema. Arbitrary YAML from other workflow
 products is not automatically compatible.
+
+The bundled [Foreman engineering workflow](foreman.md) uses these same mechanisms.
+Its campaign stages and boxes are work artifacts, not another runtime capability layer.
 
 ## One layer: capabilities
 
@@ -69,7 +72,7 @@ next capability pause at runtime and produce a checker warning.
 ## Check a workflow
 
 ```sh
-npm run workflow:check -- /path/to/jev.workflow.yaml
+npm run workflow:check -- /path/to/foreman.workflow.yaml
 ```
 
 Loading a workflow runs the same structural and semantic error checks. The CLI
@@ -92,7 +95,7 @@ nonzero; warnings do not prevent loading. Checks include:
 Optional host inventory checks use an already running OpenCode server:
 
 ```sh
-npm run workflow:check -- /path/to/jev.workflow.yaml --host http://127.0.0.1:4096
+npm run workflow:check -- /path/to/foreman.workflow.yaml --host http://127.0.0.1:4096
 ```
 
 This makes read-only requests to `/provider` and `/experimental/tool/ids`, using
@@ -115,7 +118,7 @@ a design,” “test persistence,” or “ask about audience” belong in the w
 
 ## Outputs and evidence
 
-`jev_report` accepts `summary`, `outcome`, optional `data`, `covered`, and
+`foreman_report` accepts `summary`, `outcome`, optional `data`, `covered`, and
 `questions`. The `data` object has no built-in domain fields. Ready reports
 must satisfy the capability's JSON Schema and gates before anything is stored.
 Incomplete/blocked reports describe findings in the summary without publishing
@@ -179,7 +182,7 @@ rejected; use `commands` and `acceptance` respectively.
 
 Schema-2 snapshots with producer outputs and a currently valid workflow migrate
 to schema 3 with a private backup. Older snapshots without provenance cannot be
-reconstructed safely: preserve the original outside `.jev/foreman-state.json`
+reconstructed safely: preserve the original outside `.foreman/foreman-state.json`
 and start a new workflow from the existing files. `gate.files` accepts a fixed path list or a qualified reference to an artifact-path array.
 
 An evidence-gated capability cannot edit the other producer’s saved command or
@@ -188,7 +191,7 @@ project root and finish with exit code zero. The latest result takes precedence.
 Evidence from an older visit or revision cannot satisfy the gate. Commands
 themselves are trusted workflow/project code, not guaranteed read-only.
 
-For tool permissions, `jev_status` is always available. `jev_report` is available
+For tool permissions, `foreman_status` is always available. `foreman_report` is available
 only while running and before a report is accepted. Other tools follow the
 capability's allow/deny rules. After an accepted report, only status inspection
 is allowed until the next capability.

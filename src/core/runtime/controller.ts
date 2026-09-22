@@ -68,14 +68,14 @@ function isProcessAlive(pid: number) {
 }
 
 function parseUserMessage(text: string) {
-  const bypass = /^\s*(?:foreman|jev) bypass:/i.test(text);
-  const resumeCommand = /^\s*(?:foreman|jev) resume\b/i.test(text);
+  const bypass = /^\s*foreman bypass:/i.test(text);
+  const resumeCommand = /^\s*foreman resume\b/i.test(text);
   const stop =
     /^\s*(stop|cancel|pause)(\s+(working|the workflow|this task))?[.!]?\s*$/i.test(
       text,
     );
   const guidance = resumeCommand
-    ? text.replace(/^\s*(?:foreman|jev) resume\b\s*:?\s*/i, "").trim()
+    ? text.replace(/^\s*foreman resume\b\s*:?\s*/i, "").trim()
     : /^(continue|resume)[.!]?$/i.test(text.trim())
       ? ""
       : text;
@@ -86,7 +86,7 @@ function parseUserMessage(text: string) {
 /** Coordinates saved workflow state, Jev decisions, and report validation. */
 export class Controller {
   readonly workflow: Workflow;
-  readonly maxTurns: number;
+  readonly maxTurns: number | undefined;
   private readonly compiler = new WorkflowCompiler();
   private readonly owner = randomUUID();
   private readonly decisions = new Map<string, AbortController>();
@@ -97,9 +97,12 @@ export class Controller {
     options: { workflow: Workflow; maxTurns?: number },
   ) {
     this.workflow = this.compiler.compile(options.workflow).definition;
-    this.maxTurns = options.maxTurns ?? 40;
+    this.maxTurns = options.maxTurns;
 
-    if (!Number.isInteger(this.maxTurns) || this.maxTurns < 1)
+    if (
+      this.maxTurns !== undefined &&
+      (!Number.isSafeInteger(this.maxTurns) || this.maxTurns < 1)
+    )
       throw new Error("Invalid supervisor configuration");
   }
 
@@ -380,7 +383,7 @@ export class Controller {
     host?: { model?: ModelRef; agent?: string },
   ): WorkflowState {
     const context = newTransitionContext();
-    const explicit = /^\s*(?:foreman|jev):/i.test(text);
+    const explicit = /^\s*foreman:/i.test(text);
 
     return {
       schema: 3,
@@ -497,7 +500,7 @@ export class Controller {
 
     if (!state) return;
 
-    if (tool === "jev_status") return;
+    if (tool === "foreman_status") return;
 
     if (state.phase.kind !== "working")
       throw new Error(
@@ -506,7 +509,7 @@ export class Controller {
           : "Workflow " + state.status + ": stop",
       );
 
-    if (tool === "jev_report") return;
+    if (tool === "foreman_report") return;
 
     const rules = state.workflow.capabilities[state.capability]!.tools;
 

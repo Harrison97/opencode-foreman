@@ -6,9 +6,10 @@ import { UsageLog } from "../jev/usage.js";
 import { resolve } from "node:path";
 import { loadWorkflowConfig } from "./config.js";
 import type { WorkflowState } from "../core/types.js";
+import { sanitize } from "../core/security.js";
 
-export const JevSupervisor: Plugin = async ({ directory, client }) => {
-  if (process.env.JEV_DISABLED === "1") return {};
+export const ForemanPlugin: Plugin = async ({ directory, client }) => {
+  if (process.env.FOREMAN_DISABLED === "1") return {};
 
   const workflow = await loadWorkflowConfig(directory);
   const usage = new UsageLog(directory);
@@ -21,7 +22,7 @@ export const JevSupervisor: Plugin = async ({ directory, client }) => {
     await client.app
       .log({
         body: {
-          service: "jev-supervisor",
+          service: "foreman",
           level: variant === "warning" ? "warn" : "info",
           message: title + ": " + message,
         },
@@ -49,10 +50,10 @@ export const JevSupervisor: Plugin = async ({ directory, client }) => {
           await client.app
             .log({
               body: {
-                service: "jev-supervisor",
+                service: "foreman",
                 level: "error",
                 message:
-                  "Could not write .jev/usage.jsonl; Jev usage accounting may be incomplete.",
+                  "Could not write .foreman/usage.jsonl; Jev usage accounting may be incomplete.",
               },
             })
             .catch(() => {});
@@ -63,7 +64,11 @@ export const JevSupervisor: Plugin = async ({ directory, client }) => {
     }),
     {
       workflow,
-      maxTurns: Number(process.env.JEV_MAX_TURNS ?? 40),
+      maxTurns:
+        process.env.FOREMAN_MAX_TURNS === undefined ||
+        process.env.FOREMAN_MAX_TURNS === "unlimited"
+          ? undefined
+          : Number(process.env.FOREMAN_MAX_TURNS),
     },
   );
   let disposed = false;
@@ -71,7 +76,7 @@ export const JevSupervisor: Plugin = async ({ directory, client }) => {
   const timers = new Map<string, ReturnType<typeof setTimeout>>();
   const log = async (message: string) => {
     await client.app
-      .log({ body: { service: "jev-supervisor", level: "info", message } })
+      .log({ body: { service: "foreman", level: "info", message } })
       .catch(() => {});
   };
   await log("Loaded Foreman workflow: " + workflow.name);
@@ -178,7 +183,13 @@ export const JevSupervisor: Plugin = async ({ directory, client }) => {
             messageID: delivery.id,
             model: await selectModel(latest),
             agent: latest.agent,
-            parts: [{ type: "text", text: delivery.text, synthetic: true }],
+            parts: [
+              {
+                type: "text",
+                text: delivery.text + "\n\n" + controller.instructions(latest),
+                synthetic: true,
+              },
+            ],
           },
         });
 
@@ -299,7 +310,7 @@ export const JevSupervisor: Plugin = async ({ directory, client }) => {
           schedule(s.sessionID);
     } catch {
       await log(
-        "Could not recover Foreman state; run jev_status to inspect local state.",
+        "Could not recover Foreman state; run foreman_status to inspect local state.",
       );
     }
   }
@@ -431,16 +442,24 @@ export const JevSupervisor: Plugin = async ({ directory, client }) => {
       schedule(sessionID);
     },
     tool: {
-      jev_status: tool({
+      foreman_status: tool({
         description:
           "Read the durable Foreman workflow and current capability. No transition is requested.",
-        args: {},
-        execute: async (_args, context) =>
-          JSON.stringify(
-            (await controller.get(context.sessionID)) ?? { managed: false },
-          ),
+        args: { producer: tool.schema.string().optional() },
+        execute: async (args, context) => {
+          const state = await controller.get(context.sessionID);
+          if (!state) return JSON.stringify({ managed: false });
+          if (args.producer)
+            return JSON.stringify({
+              capability: state.capability,
+              producer: args.producer,
+              completed: Object.hasOwn(state.completed, args.producer),
+              output: state.capabilityOutputs[args.producer] ?? null,
+            });
+          return controller.instructions(state);
+        },
       }),
-      jev_report: tool({
+      foreman_report: tool({
         description:
           "Report the CURRENT capability. Put workflow-defined outputs in data. For incomplete/blocked omit data and describe findings in summary. Questions are essential human decisions only. covered contains exact labels required by an acceptance gate. After acceptance, finish the response. Correct a rejected report in this turn.",
         args: {
@@ -453,7 +472,21 @@ export const JevSupervisor: Plugin = async ({ directory, client }) => {
           covered: strings,
         },
         execute: async (args, context) => {
-          await controller.report(context.sessionID, args);
+          try {
+            await controller.report(context.sessionID, args);
+          } catch (error) {
+            const state = await controller.get(context.sessionID);
+            throw new Error(
+              sanitize(
+                (error instanceof Error ? error.message : "Report rejected") +
+                  "\nThe report was not accepted. Correct it for the current capability.\n" +
+                  (state
+                    ? controller.instructions(state)
+                    : "No managed workflow."),
+              ),
+              { cause: error },
+            );
+          }
 
           return "Capability report persisted. Finish your response now. Foreman selects the next eligible capability.";
         },

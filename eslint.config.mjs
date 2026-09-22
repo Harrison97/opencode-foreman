@@ -10,13 +10,13 @@ export default tseslint.config(
       "dist/**",
       "artifacts/**",
       "research/**",
-      ".jev/**",
+      ".foreman/**",
     ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ["**/*.{ts,js,mjs}"],
+    files: ["**/*.{ts,tsx,js,mjs}"],
     languageOptions: { globals: globals.node },
     rules: {
       "no-unused-vars": "off",
@@ -34,7 +34,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["src/**/*.ts"],
+    files: ["src/**/*.ts", "src/**/*.tsx"],
     languageOptions: {
       parserOptions: {
         projectService: true,

@@ -1,8 +1,9 @@
 node_modules/
 dist/
-.jev/
+.foreman/
 .env
 .env.*
 artifacts/
 research/
 BENCHMARK-*.md
+.DS_Store

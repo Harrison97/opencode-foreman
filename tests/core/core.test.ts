@@ -247,7 +247,7 @@ test("finite work limits and repeated work pause without special workflow nodes"
 test("durable state, locking, old state preservation and secret redaction", async () => {
   const f = await fixture();
   const other = new StateStore(f.root);
-  const oldPath = join(f.root, ".jev/state.json");
+  const oldPath = join(f.root, ".foreman/state.json");
   await writeFile(oldPath, '{"schema":1,"historical":"untouched"}');
   await Promise.all(
     Array.from({ length: 12 }, (_, i) =>
@@ -285,7 +285,8 @@ test("missing reports and unsatisfied next dependencies cannot falsely complete"
   w.capabilities.draft!.next!.incomplete = ["publish"];
   const f = await fixture(w);
   const paused = await f.c.gate("s", "no-report");
-  assert.equal(paused?.status, "paused");
+  assert.equal(paused?.capability, "draft");
+  assert.equal(paused?.phase.kind, "dispatching");
   assert.equal(paused?.completed.draft, undefined);
 });
 test("a completed workflow detaches before normal conversation or a fresh request", async () => {
@@ -367,4 +368,44 @@ test("Jev HTTP contract and errors do not disclose credentials", async () => {
     }).choose({}, { draft: "Write" }, "choose"),
     /authentication rejected.*HTTP 401/,
   );
+});
+
+test("default work-unit budget continues beyond 40 turns and survives reload", async () => {
+  const f = await fixture();
+  for (let i = 0; i < 23; i++) {
+    await advance(f.c, "s", `draft-${i}`);
+    await f.c.report("s", {
+      summary: "A bounded revision is needed",
+      outcome: "incomplete",
+    });
+    const next = (await f.c.gate("s", `proof-${i}`))!;
+    assert.equal(next.status, "running");
+    await f.c.received("s", next.pending!.id);
+  }
+  assert.equal((await f.state()).turns, 46);
+  const reloaded = new Controller(new StateStore(f.root), chooser(), {
+    workflow: sample,
+  });
+  assert.equal(reloaded.maxTurns, undefined);
+  assert.equal(
+    (await advance(reloaded, "s", "after-reload")).status,
+    "running",
+  );
+  assert.equal((await reloaded.get("s"))!.turns, 47);
+});
+
+test("explicit work-unit caps must be positive safe integers", async () => {
+  const f = await fixture();
+  for (const maxTurns of [
+    0,
+    -1,
+    1.5,
+    NaN,
+    Infinity,
+    Number.MAX_SAFE_INTEGER + 1,
+  ])
+    assert.throws(
+      () => new Controller(f.store, chooser(), { workflow: sample, maxTurns }),
+      /Invalid supervisor configuration/,
+    );
 });

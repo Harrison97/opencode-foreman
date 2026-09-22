@@ -44,11 +44,11 @@ export class UsageLog {
   readonly path: string;
 
   constructor(readonly root: string) {
-    this.path = join(root, ".jev", "usage.jsonl");
+    this.path = join(root, ".foreman", "usage.jsonl");
   }
 
   async append(record: JevUsage): Promise<void> {
-    const dir = join(this.root, ".jev");
+    const dir = join(this.root, ".foreman");
     await mkdir(dir, { recursive: true, mode: 0o700 });
     await chmod(dir, 0o700);
     await writeFile(join(dir, ".gitignore"), "*\n", { mode: 0o600 });

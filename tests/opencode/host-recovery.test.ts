@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import YAML from "yaml";
-import { JevSupervisor } from "../../src/opencode/plugin.js";
+import { ForemanPlugin } from "../../src/opencode/plugin.js";
 import { fixture, sample, ready, advance } from "../support/fixtures.js";
 
 async function until(predicate: () => Promise<boolean>) {
@@ -29,15 +29,18 @@ async function setup() {
     covered: ready.data.labels,
   });
   const pending = await f.c.gate("s", "verified");
-  await writeFile(join(f.root, "jev.workflow.yaml"), YAML.stringify(sample));
+  await writeFile(
+    join(f.root, "foreman.workflow.yaml"),
+    YAML.stringify(sample),
+  );
   const messages: any[] = [],
     toasts: any[] = [],
     sent: any[] = [];
   let fail = false,
     busy = false,
-    plugin: Awaited<ReturnType<typeof JevSupervisor>>;
+    plugin: Awaited<ReturnType<typeof ForemanPlugin>>;
   async function boot() {
-    plugin = await JevSupervisor({
+    plugin = await ForemanPlugin({
       directory: f.root,
       client: {
         app: { log: async () => ({}) },

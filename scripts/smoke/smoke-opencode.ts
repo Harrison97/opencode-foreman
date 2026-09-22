@@ -24,7 +24,7 @@ const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const root = await realpath(
   await mkdtemp(join(tmpdir(), "foreman-generic-smoke-")),
 );
-const modelName = process.env.JEV_SMOKE_MODEL ?? "openai/gpt-5.6-luna";
+const modelName = process.env.FOREMAN_SMOKE_MODEL ?? "openai/gpt-5.6-luna";
 const slash = modelName.indexOf("/");
 const model = {
   providerID: modelName.slice(0, slash),
@@ -54,7 +54,7 @@ async function start() {
       cwd: root,
       env: {
         ...process.env,
-        JEV_DISABLED: "0",
+        FOREMAN_DISABLED: "0",
         OPENCODE_SERVER_PASSWORD: "",
         OPENCODE_SERVER_USERNAME: "",
       },
@@ -94,7 +94,7 @@ async function api(path: string, dir: string, body?: unknown): Promise<any> {
 async function state(dir: string): Promise<WorkflowView | undefined> {
   try {
     const db = JSON.parse(
-      await readFile(join(dir, ".jev/foreman-state.json"), "utf8"),
+      await readFile(join(dir, ".foreman/foreman-state.json"), "utf8"),
     ) as Database;
     return db.workflows[db.active!]
       ? viewState(db.workflows[db.active!]!)
@@ -141,7 +141,10 @@ async function project(name: string, workflow?: Workflow) {
     }),
   );
   if (workflow)
-    await writeFile(join(dir, "jev.workflow.yaml"), YAML.stringify(workflow));
+    await writeFile(
+      join(dir, "foreman.workflow.yaml"),
+      YAML.stringify(workflow),
+    );
   return dir;
 }
 async function submit(dir: string, sessionID: string, text: string) {
@@ -170,162 +173,204 @@ async function retain(dir: string, s: WorkflowView) {
 }
 try {
   await start();
-  const custom: Workflow = {
-    version: 1,
-    name: "greeting-editor",
-    admission: {
-      instructions:
-        "Use compose for requested greetings. BYPASS unrelated requests.",
-      entries: ["compose"],
-    },
-    capabilities: {
-      compose: {
-        purpose: "Write the greeting artifact",
+  if (process.env.FOREMAN_SMOKE_SCENARIO === "interview") {
+    const dir = await project("default-interview");
+    const session = await api("/session", dir, {
+      title: "Foreman ambiguous idea interview",
+    });
+    await submit(
+      dir,
+      session.id,
+      "foreman: I want to build an app that helps people organize their lives. Interview me before deciding what to build.",
+    );
+    const paused = await waitFor(dir, (s) => s.status === "paused");
+    assert.equal(paused.capability, "interview");
+    assert.ok(paused.questions.length > 0);
+    const brief = await readFile(join(dir, ".foreman/brief.md"), "utf8");
+    assert.ok(
+      brief.length > 200,
+      "Expected a substantive durable partial brief",
+    );
+    assert.equal(paused.completed.interview, undefined);
+    assert.equal(
+      paused.history.some((t) => t.to === "build"),
+      false,
+    );
+    await retain(dir, paused);
+    console.log(
+      "PASS: default Foreman asks product questions and persists a partial brief before implementation.",
+    );
+  } else {
+    const custom: Workflow = {
+      version: 1,
+      name: "greeting-editor",
+      admission: {
         instructions:
-          "Write greeting.txt containing exactly Hello Foreman followed by a newline. On a return after a failed check, restore this same correct greeting. Do not modify contract.mjs or the smoke marker. Report ready.",
-        tools: {
-          allow: ["read", "write", "edit", "apply_patch", "glob", "grep"],
-        },
-        completion: "The greeting is written",
-        gate: { files: ["greeting.txt"] },
-        outputs: {
-          type: "object",
-          additionalProperties: false,
-          required: ["commands", "criteria"],
-          properties: {
-            commands: { const: ["node contract.mjs"] },
-            criteria: { const: ["Greeting is exact"] },
+          "Use compose for requested greetings. BYPASS unrelated requests.",
+        entries: ["compose"],
+      },
+      capabilities: {
+        compose: {
+          purpose: "Write the greeting artifact",
+          instructions:
+            "Write greeting.txt containing exactly Hello Foreman followed by a newline. On a return after a failed check, restore this same correct greeting. Do not modify contract.mjs or the smoke marker. Report ready.",
+          tools: {
+            allow: ["read", "write", "edit", "apply_patch", "glob", "grep"],
+          },
+          completion: "The greeting is written",
+          gate: { files: ["greeting.txt"] },
+          outputs: {
+            type: "object",
+            additionalProperties: false,
+            required: ["commands", "criteria"],
+            properties: {
+              commands: { const: ["node contract.mjs"] },
+              criteria: { const: ["Greeting is exact"] },
+            },
+          },
+          next: {
+            ready: ["inspect"],
+            incomplete: ["compose"],
+            blocked: ["compose"],
           },
         },
-        next: {
-          ready: ["inspect"],
-          incomplete: ["compose"],
-          blocked: ["compose"],
+        inspect: {
+          purpose: "Check the greeting",
+          instructions:
+            "Run node contract.mjs exactly. On failure report incomplete; compose will repair. On success report ready with covered containing Greeting is exact. Do not edit files.",
+          completion: "Native check passes",
+          dependsOn: ["compose"],
+          tools: { allow: ["read", "bash", "shell"], declaredChecksOnly: true },
+          gate: {
+            commands: "compose.commands",
+            acceptance: "compose.criteria",
+          },
+          next: {
+            ready: ["hand_off"],
+            incomplete: ["compose"],
+            blocked: ["compose"],
+          },
+        },
+        hand_off: {
+          purpose: "Deliver greeting",
+          instructions: "Give the greeting and confirm the check result.",
+          completion: "Delivered",
+          dependsOn: ["inspect"],
+          terminal: true,
         },
       },
-      inspect: {
-        purpose: "Check the greeting",
-        instructions:
-          "Run node contract.mjs exactly. On failure report incomplete; compose will repair. On success report ready with covered containing Greeting is exact. Do not edit files.",
-        completion: "Native check passes",
-        dependsOn: ["compose"],
-        tools: { allow: ["read", "bash", "shell"], declaredChecksOnly: true },
-        gate: { commands: "compose.commands", acceptance: "compose.criteria" },
-        next: {
-          ready: ["hand_off"],
-          incomplete: ["compose"],
-          blocked: ["compose"],
-        },
-      },
-      hand_off: {
-        purpose: "Deliver greeting",
-        instructions: "Give the greeting and confirm the check result.",
-        completion: "Delivered",
-        dependsOn: ["inspect"],
-        terminal: true,
-      },
-    },
-  };
-  const dir = await project("custom-repair", custom);
-  await writeFile(
-    join(dir, "contract.mjs"),
-    `import {existsSync,writeFileSync,readFileSync} from 'node:fs';\nimport assert from 'node:assert/strict';\nif(!existsSync('.smoke-fault-injected')){writeFileSync('.smoke-fault-injected','once');writeFileSync('greeting.txt','Helo Foreman\\n');}\nassert.equal(readFileSync('greeting.txt','utf8'),'Hello Foreman\\n');\nconsole.log('PASS');\n`,
-  );
-  const session = await api("/session", dir, {
-    title: "Foreman custom workflow smoke",
-  });
-  await submit(
-    dir,
-    session.id,
-    "foreman: Produce the local greeting artifact and check it. Use the configured workflow; make routine decisions yourself.",
-  );
-  const end = await waitFor(dir, (s) => s.status === "complete");
-  assert.ok(
-    end.history.some((t) => t.from === "inspect" && t.to === "compose"),
-  );
-  assert.ok(end.evidence.some((e) => e.exit !== 0));
-  assert.ok(end.evidence.some((e) => e.exit === 0));
-  assert.equal(
-    await readFile(join(dir, "greeting.txt"), "utf8"),
-    "Hello Foreman\n",
-  );
-  assert.ok(
-    summarizeUsage((await new UsageLog(dir).read()).records)
-      .successfulRequests > 0,
-  );
-  await retain(dir, end);
+    };
+    if (process.env.FOREMAN_SMOKE_SCENARIO !== "default") {
+      const dir = await project("custom-repair", custom);
+      await writeFile(
+        join(dir, "contract.mjs"),
+        `import {existsSync,writeFileSync,readFileSync} from 'node:fs';\nimport assert from 'node:assert/strict';\nif(!existsSync('.smoke-fault-injected')){writeFileSync('.smoke-fault-injected','once');writeFileSync('greeting.txt','Helo Foreman\\n');}\nassert.equal(readFileSync('greeting.txt','utf8'),'Hello Foreman\\n');\nconsole.log('PASS');\n`,
+      );
+      const session = await api("/session", dir, {
+        title: "Foreman custom workflow smoke",
+      });
+      await submit(
+        dir,
+        session.id,
+        "foreman: Produce the local greeting artifact and check it. Use the configured workflow; make routine decisions yourself.",
+      );
+      const end = await waitFor(dir, (s) => s.status === "complete");
+      assert.ok(
+        end.history.some((t) => t.from === "inspect" && t.to === "compose"),
+      );
+      assert.ok(end.evidence.some((e) => e.exit !== 0));
+      assert.ok(end.evidence.some((e) => e.exit === 0));
+      assert.equal(
+        await readFile(join(dir, "greeting.txt"), "utf8"),
+        "Hello Foreman\n",
+      );
+      assert.ok(
+        summarizeUsage((await new UsageLog(dir).read()).records)
+          .successfulRequests > 0,
+      );
+      await retain(dir, end);
+    }
+    // Same generic engine, bundled software workflow.
+    const app = await project("default-software");
+    await writeFile(
+      join(app, "DESIGN.md"),
+      "Implement sum(a,b) in sum.mjs; require finite numbers, otherwise throw TypeError. No dependencies. Add node:test tests, npm test, and README. Use node --test as the terminating verification command.",
+    );
+    const software = await api("/session", app, {
+      title: "Foreman default YAML smoke",
+    });
+    await submit(
+      app,
+      software.id,
+      "foreman: Implement the complete module specified in DESIGN.md, with tests and README. Make routine engineering decisions yourself.",
+    );
+    const delivered = await waitFor(app, (s) => s.status === "complete", 900);
+    assert.ok(delivered.history.some((t) => t.to === "review"));
+    assert.ok(delivered.history.some((t) => t.to === "verify"));
+    assert.equal(delivered.workflow.name, "Foreman");
+    execFileSync(
+      process.execPath,
+      [
+        "--input-type=module",
+        "-e",
+        "import {sum} from './sum.mjs'; import assert from 'node:assert/strict'; assert.equal(sum(2,3),5); assert.throws(()=>sum(NaN,2),TypeError);",
+      ],
+      { cwd: app },
+    );
+    await retain(app, delivered);
 
-  // Same generic engine, bundled software workflow.
-  const app = await project("default-software");
-  await writeFile(
-    join(app, "DESIGN.md"),
-    "Implement sum(a,b) in sum.mjs; require finite numbers, otherwise throw TypeError. No dependencies. Add node:test tests, npm test, and README. Use node --test as the terminating verification command.",
-  );
-  const software = await api("/session", app, {
-    title: "Foreman default YAML smoke",
-  });
-  await submit(
-    app,
-    software.id,
-    "foreman: Implement the complete module specified in DESIGN.md, with tests and README. Make routine engineering decisions yourself.",
-  );
-  const delivered = await waitFor(app, (s) => s.status === "complete");
-  assert.ok(delivered.history.some((t) => t.to === "review"));
-  execFileSync(
-    process.execPath,
-    [
-      "--input-type=module",
-      "-e",
-      "import {sum} from './sum.mjs'; import assert from 'node:assert/strict'; assert.equal(sum(2,3),5); assert.throws(()=>sum(NaN,2),TypeError);",
-    ],
-    { cwd: app },
-  );
-  await retain(app, delivered);
-
-  // Actual human pause and host restart using arbitrary capability names.
-  const human = structuredClone(custom);
-  human.name = "greeting-with-user-decision";
-  human.capabilities.compose!.instructions =
-    "If progress contains no human guidance, report blocked with questions asking for the greeting text. Do not make the choice yourself. After guidance, write greeting.txt containing Hello Foreman and a newline and report ready with commands [node contract.mjs] and criteria [Greeting is exact].";
-  const waitingDir = await project("human-resume", human);
-  await writeFile(
-    join(waitingDir, "contract.mjs"),
-    "import {readFileSync} from 'node:fs'; import assert from 'node:assert/strict'; assert.equal(readFileSync('greeting.txt','utf8'),'Hello Foreman\\n');",
-  );
-  const humanSession = await api("/session", waitingDir, {
-    title: "Foreman human resume smoke",
-  });
-  await submit(
-    waitingDir,
-    humanSession.id,
-    "foreman: Prepare the greeting; ask me which greeting to use.",
-  );
-  const paused = await waitFor(waitingDir, (s) => s.status === "paused");
-  assert.ok(paused.questions.length);
-  await delay(1000);
-  assert.equal((await state(waitingDir))!.epoch, paused.epoch);
-  await stop();
-  await start();
-  assert.equal((await state(waitingDir))!.id, paused.id);
-  await submit(
-    waitingDir,
-    humanSession.id,
-    "Use exactly Hello Foreman followed by a newline.",
-  );
-  // Admission happens asynchronously; wait for it to consume human guidance.
-  for (
-    let i = 0;
-    i < 100 && (await state(waitingDir))?.status === "paused";
-    i++
-  )
-    await delay(100);
-  const resumed = await waitFor(waitingDir, (s) => s.status === "complete");
-  assert.equal(resumed.id, paused.id);
-  await retain(waitingDir, resumed);
+    if (process.env.FOREMAN_SMOKE_SCENARIO !== "default") {
+      // Actual human pause and host restart using arbitrary capability names.
+      const human = structuredClone(custom);
+      human.name = "greeting-with-user-decision";
+      human.capabilities.compose!.instructions =
+        "If progress contains no human guidance, report blocked with questions asking for the greeting text. Do not make the choice yourself. After guidance, write greeting.txt containing Hello Foreman and a newline and report ready with commands [node contract.mjs] and criteria [Greeting is exact].";
+      const waitingDir = await project("human-resume", human);
+      await writeFile(
+        join(waitingDir, "contract.mjs"),
+        "import {readFileSync} from 'node:fs'; import assert from 'node:assert/strict'; assert.equal(readFileSync('greeting.txt','utf8'),'Hello Foreman\\n');",
+      );
+      const humanSession = await api("/session", waitingDir, {
+        title: "Foreman human resume smoke",
+      });
+      await submit(
+        waitingDir,
+        humanSession.id,
+        "foreman: Prepare the greeting; ask me which greeting to use.",
+      );
+      const paused = await waitFor(waitingDir, (s) => s.status === "paused");
+      assert.ok(paused.questions.length);
+      await delay(1000);
+      assert.equal((await state(waitingDir))!.epoch, paused.epoch);
+      await stop();
+      await start();
+      assert.equal((await state(waitingDir))!.id, paused.id);
+      await submit(
+        waitingDir,
+        humanSession.id,
+        "Use exactly Hello Foreman followed by a newline.",
+      );
+      // Admission happens asynchronously; wait for it to consume human guidance.
+      for (
+        let i = 0;
+        i < 100 && (await state(waitingDir))?.status === "paused";
+        i++
+      )
+        await delay(100);
+      const resumed = await waitFor(waitingDir, (s) => s.status === "complete");
+      assert.equal(resumed.id, paused.id);
+      await retain(waitingDir, resumed);
+    }
+  }
   summary.success = true;
-  console.log(
-    "PASS: custom capability repair, default software YAML, human resume, host restart, and real Jev usage.",
-  );
+  if (process.env.FOREMAN_SMOKE_SCENARIO === "default")
+    console.log(
+      "PASS: default Foreman campaign completed with native verification and real Jev.",
+    );
+  else if (process.env.FOREMAN_SMOKE_SCENARIO !== "interview")
+    console.log(
+      "PASS: custom capability repair, default Foreman YAML, human resume, host restart, and real Jev usage.",
+    );
 } catch (error) {
   summary.success = false;
   summary.error = error instanceof Error ? error.message : String(error);
@@ -339,7 +384,13 @@ try {
     JSON.stringify(sanitize(summary), null, 2),
   );
   await writeFile(
-    resolve("artifacts/foreman-generic-smoke.json"),
+    resolve(
+      process.env.FOREMAN_SMOKE_SCENARIO === "interview"
+        ? "artifacts/foreman-interview-smoke.json"
+        : process.env.FOREMAN_SMOKE_SCENARIO === "default"
+          ? "artifacts/foreman-default-smoke.json"
+          : "artifacts/foreman-generic-smoke.json",
+    ),
     JSON.stringify(sanitize(summary), null, 2),
   );
   console.log("Smoke artifacts: " + root);
