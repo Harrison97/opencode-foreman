@@ -15,6 +15,7 @@ test('highest probability wins below 0.75; ties retain the service choice', asyn
   const w = structuredClone(sample); w.capabilities.proof!.dependsOn = [];
   // Both admission candidates produce a usable contract before review.
   w.capabilities.alternative = structuredClone(w.capabilities.draft!); w.admission.entries.push('alternative');
+  w.capabilities.alternative.next!.ready = ['draft'];
   const f = await fixture(w, {choose:async()=>({choice:'draft',confidence:0.1,probabilities:{draft:0.4,alternative:0.6}})});
   assert.equal((await f.state()).capability,'alternative');
   assert.equal((await f.state()).history[0]!.confidence,0.6);

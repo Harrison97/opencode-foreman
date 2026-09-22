@@ -101,7 +101,7 @@ try {
         next:{ready:['inspect'],incomplete:['compose'],blocked:['compose']},},
       inspect:{purpose:'Check the greeting',instructions:'Run node contract.mjs exactly. On failure report incomplete; compose will repair. On success report ready with covered containing Greeting is exact. Do not edit files.',
         completion:'Native check passes',dependsOn:['compose'],tools:{allow:['read','bash','shell'],declaredChecksOnly:true},
-        gate:{checks:'commands',coverage:'criteria'},next:{ready:['hand_off'],incomplete:['compose'],blocked:['compose']},},
+        gate:{commands:'compose.commands',acceptance:'compose.criteria'},next:{ready:['hand_off'],incomplete:['compose'],blocked:['compose']},},
       hand_off:{purpose:'Deliver greeting',instructions:'Give the greeting and confirm the check result.',completion:'Delivered',dependsOn:['inspect'],terminal:true},
     },
   };

@@ -13,7 +13,7 @@ import { fixture, sample, ready, advance } from './fixtures.js';
 test('bundled software workflow uses the same parser and has one capability layer', async () => {
   const w = await loadWorkflowFile(resolve('src/workflows/software-engineer/workflow.yaml'));
   assert.equal(w.name,'software-engineer');
-  assert.equal(w.capabilities.review!.gate?.checks,'checks');
+  assert.equal(w.capabilities.review!.gate?.commands,'build.commands');
   assert.equal(w.capabilities.review!.model,undefined);
   assert.equal(Object.hasOwn(w,'stages'),false);
 });
@@ -25,7 +25,7 @@ test('schema rejects unknown semantics, references, dependency cycles, and inval
     w=>w.capabilities.draft.dependsOn=['proof'],
     w=>w.capabilities.publish.next={ready:['draft']},
     w=>w.capabilities.proof.model='bad model',
-    w=>w.capabilities.proof.gate={coverage:'labels'},
+    w=>w.capabilities.proof.gate={acceptance:'labels'},
     w=>w.admission.fallback='publish',
     w=>w.capabilities.draft.outputs={type:'object',unknownKeyword:true},
     w=>w.capabilities.lonely={purpose:'x',instructions:'x',completion:'x',terminal:true},

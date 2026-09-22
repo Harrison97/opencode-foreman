@@ -22,7 +22,7 @@ const schema = {
           purpose: string, instructions: string, completion: string, model: string,
           dependsOn: strings, outputs: { type: 'object' }, append: strings,
           tools: { type: 'object', additionalProperties: false, properties: { allow: strings, deny: strings, declaredChecksOnly: { type: 'boolean' } } },
-          gate: { type: 'object', additionalProperties: false, properties: { files: strings, checks: string, coverage: string } },
+          gate: { type: 'object', additionalProperties: false, properties: { files: { anyOf: [strings, string] }, commands: string, acceptance: string } },
           next: outcomes, terminal: { type: 'boolean' },
         },
       },
@@ -51,7 +51,6 @@ export function parseWorkflow(value: unknown): Workflow {
     for (const target of [...Object.values(c.next ?? {}).flat(), ...(c.dependsOn ?? [])]) if (!has(target)) throw new Error('Unknown capability reference: ' + target);
     if (c.terminal && (Object.values(c.next ?? {}).some(list => list!.length) || c.gate || c.outputs)) throw new Error('Terminal delivery cannot have transitions, outputs, or gates');
     if (!c.terminal && !Object.values(c.next ?? {}).some(list => list!.length)) throw new Error('Nonterminal capability needs transitions: ' + id);
-    if (c.gate?.coverage && !c.gate.checks) throw new Error('Coverage gate requires checks');
   }
   for (const entry of w.admission.entries) {
     if (!has(entry) || w.capabilities[entry]!.terminal || w.capabilities[entry]!.dependsOn?.length) throw new Error('Entry must be an independent, nonterminal capability');

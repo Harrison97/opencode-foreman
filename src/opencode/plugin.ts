@@ -133,7 +133,7 @@ export const JevSupervisor: Plugin = async ({ directory, client }) => {
       jev_status: tool({ description: 'Read the durable Foreman workflow and current capability. No transition is requested.', args: {},
         execute: async (_args, context) => JSON.stringify(await controller.get(context.sessionID) ?? { managed: false }) }),
       jev_report: tool({
-        description: 'Report the CURRENT capability. Put workflow-defined outputs in data. For incomplete/blocked omit data and describe findings in summary. Questions are essential human decisions only. covered contains exact labels required by a coverage gate. After acceptance, finish the response. Correct a rejected report in this turn.',
+        description: 'Report the CURRENT capability. Put workflow-defined outputs in data. For incomplete/blocked omit data and describe findings in summary. Questions are essential human decisions only. covered contains exact labels required by an acceptance gate. After acceptance, finish the response. Correct a rejected report in this turn.',
         args: {
           summary: tool.schema.string().min(1).max(4000), outcome: tool.schema.enum(['ready', 'incomplete', 'blocked']),
           data: tool.schema.record(tool.schema.string(), tool.schema.unknown()).optional(),

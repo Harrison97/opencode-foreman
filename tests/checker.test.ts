@@ -13,14 +13,14 @@ import { parseWorkflow } from '../src/core/workflow.js';
 
 test('missing, mistyped, optional and self-produced gate contracts fail at load time', () => {
   const cases: [((w: any) => void), RegExp][] = [
-    [w => w.capabilities.proof.gate.checks = 'typo', /proof.gate.checks.*No capability declares output typo/],
+    [w => w.capabilities.proof.gate.commands = 'draft.typo', /proof.gate.commands.*No declared output draft.typo/],
     [w => w.capabilities.draft.outputs.properties.checks = { type: 'number' }, /must be an array of strings/],
     [w => w.capabilities.draft.outputs.properties.checks.items = { type: 'number' }, /must be an array of strings/],
     [w => w.capabilities.draft.outputs.required = ['labels'], /not guaranteed on every entry path/],
     [w => { w.capabilities.proof.dependsOn = []; w.admission.entries.push('proof'); }, /not guaranteed on every entry path/],
     [w => w.capabilities.proof.outputs = w.capabilities.draft.outputs, /gated contract fields cannot be overwritten/],
     [w => w.capabilities.draft.append = ['missing'], /Declare missing as an array/],
-    [w => { delete w.capabilities.proof.gate; }, /Set gate.checks/],
+    [w => { delete w.capabilities.proof.gate; }, /Set gate.commands/],
     [w => w.capabilities.proof.tools.allow = ['read'], /requires an allowed bash or shell/],
   ];
   for (const [mutate, expected] of cases) { const w = structuredClone(sample); mutate(w); assert.throws(() => parseWorkflow(w), expected); }
@@ -32,13 +32,15 @@ test('dependency-aware exploration catches deadlocks while preserving valid repa
   dead.capabilities.proof!.dependsOn = ['publish'];
   dead.capabilities.publish!.dependsOn = ['draft'];
   assert.throws(() => parseWorkflow(dead), /unreachable with completion prerequisites/);
-  // All branches produce the same required contract, even with different entry nodes.
+  // A different producer with identically named outputs cannot satisfy draft's contract.
   const branched = structuredClone(sample);
   branched.capabilities.alternate = structuredClone(branched.capabilities.draft!);
   branched.admission.entries.push('alternate');
   branched.capabilities.proof!.dependsOn = [];
+  assert.throws(() => parseWorkflow(branched), /not guaranteed on every entry path/);
+  branched.capabilities.alternate!.next!.ready = ['draft'];
   assert.doesNotThrow(() => parseWorkflow(branched));
-  (branched.capabilities.alternate!.outputs!.required as string[]) = ['labels'];
+  (branched.capabilities.draft!.outputs!.required as string[]) = ['labels'];
   assert.throws(() => parseWorkflow(branched), /not guaranteed on every entry path/);
 });
 
@@ -90,8 +92,8 @@ test('CLI reports warnings, rejects bad contracts, and optionally queries host i
     assert.equal(report.valid, true); assert.equal(report.hostChecked, true);
     assert.deepEqual(report.diagnostics, []);
     assert.deepEqual(requests.sort(), ['/experimental/tool/ids','/provider']);
-    const bad = structuredClone(sample); bad.capabilities.proof!.gate!.checks = 'missing';
+    const bad = structuredClone(sample); bad.capabilities.proof!.gate!.commands = 'missing';
     await writeFile(file, YAML.stringify(bad));
-    await assert.rejects(run(process.execPath, ['--import','tsx','scripts/check-workflow.ts',file]), (error: any) => error.code === 1 && error.stderr.includes('proof.gate.checks'));
+    await assert.rejects(run(process.execPath, ['--import','tsx','scripts/check-workflow.ts',file]), (error: any) => error.code === 1 && error.stderr.includes('proof.gate.commands'));
   } finally { await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
 });

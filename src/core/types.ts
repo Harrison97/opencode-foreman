@@ -11,7 +11,7 @@ export interface Capability {
   outputs?: Record<string, unknown>;
   append?: string[];
   tools?: { allow?: string[]; deny?: string[]; declaredChecksOnly?: boolean };
-  gate?: { files?: string[]; checks?: string; coverage?: string };
+  gate?: { files?: string[] | string; commands?: string; acceptance?: string };
   next?: Partial<Record<Outcome, string[]>>;
   terminal?: boolean;
 }
@@ -36,6 +36,7 @@ export interface WorkflowState {
   capability: string; status: 'running' | 'paused' | 'complete';
   epoch: number; revision: number; createdAt: string; updatedAt: string;
   data: Record<string, unknown>; completed: Record<string, number>;
+  capabilityOutputs?: Record<string, Record<string, unknown>>;
   progress: string[]; questions: string[]; pauseReason?: string;
   pendingDecision?: 'admission' | 'transition';
   report?: Report; evidence: Evidence[]; history: Transition[];

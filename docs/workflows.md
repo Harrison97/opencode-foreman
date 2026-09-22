@@ -55,9 +55,9 @@ capability registry.
 | next | Allowed capability IDs by `ready`, `incomplete`, and `blocked` outcome. |
 | tools.allow / tools.deny | Exact native/MCP tool names; deny takes precedence. |
 | tools.declaredChecksOnly | Restricts bash/shell to exact commands in this capability's checks gate. |
-| gate.files | Required existing project files, constrained to project directory. |
-| gate.checks | Shared-data key holding a nonempty array of command strings. |
-| gate.coverage | Shared-data key holding labels that must appear exactly in `covered`; requires a checks gate. |
+| gate.files | Fixed project-relative paths or a `capability.output` reference to an artifact-path array. |
+| gate.commands | Required `capability.output` reference to a nonempty array of command strings, e.g. `build.commands`. |
+| gate.acceptance | Required `capability.output` reference to labels that must appear exactly in `covered`, e.g. `build.acceptance`. |
 | terminal | Delivery-only capability; cannot have outputs, gates, or outgoing transitions. |
 
 Dependency edges must be acyclic. Transition edges may cycle for iterative work.
@@ -120,6 +120,63 @@ must satisfy the capability's JSON Schema and gates before anything is stored.
 Incomplete/blocked reports describe findings in the summary without publishing
 partial outputs. Accepted output keys update shared data; configured `append`
 array fields retain prior values.
+
+Gate references must identify their producer explicitly:
+
+```yaml
+gate:
+  commands: build.commands
+  acceptance: build.acceptance
+```
+
+Bare names such as `commands`, missing producers/outputs, self references in command/acceptance gates, and paths
+that skip or invalidate the named producer are rejected. References select a
+top-level output property, not a nested JSON path. Capability names start with a
+letter; output reference names start with a letter or underscore. Both may
+contain letters, digits, underscores, and hyphens.
+
+Accepted reports also save a per-capability output snapshot. Gates read the
+named producer's snapshot, never the last writer of a shared-data key. A producer
+must still be completed; invalidation makes its old snapshot ineligible. A new
+ready report replaces that producer's snapshot, including removing omitted
+optional fields. Appended fields store the merged values. Shared data remains
+available for agent context.
+
+For variable artifact names, a producing capability can check its own submitted
+paths before its ready report is accepted:
+
+```yaml
+plan:
+  # purpose, instructions, completion, and next omitted here
+  outputs:
+    type: object
+    required: [artifacts]
+    properties:
+      artifacts:
+        type: array
+        minItems: 1
+        items: {type: string, minLength: 1}
+  gate:
+    files: plan.artifacts
+```
+
+One visit can report `designs/authentication.md`, another `designs/billing.md`.
+Paths are relative to the project directory where OpenCode starts; absolute
+paths and symlinks escaping the project are rejected. Subsequent capabilities
+can also use `files: plan.artifacts`, reading the completed producer's snapshot.
+Only file gates support checking the current capability's submitted outputs.
+The default SWE plan uses this pattern instead of overwriting `DESIGN.md`.
+File gates check existence, not content quality or whether a file is newly created.
+
+`acceptance` is an LLM checklist: every referenced label must be included in the
+report's `covered` array. It does not require a commands gate and does not prove
+the checklist claims are true. The old gate keys `checks` and `coverage` are
+rejected; use `commands` and `acceptance` respectively.
+
+Older run snapshots cannot reliably reconstruct who produced shared values.
+They are preserved but cannot resume through this migration. Update the YAML,
+detach with `foreman bypass:`, and start a new workflow from the existing project
+files. `gate.files` accepts a fixed path list or a qualified reference to an artifact-path array.
 
 An evidence-gated capability cannot edit the shared command/coverage fields it
 is checking. Exact commands must execute through native bash/shell in the

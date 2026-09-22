@@ -31,23 +31,26 @@ capabilities:
   plan:
     purpose: Produce a concise design and finite verification contract.
     instructions: >
-      Inspect requirements and code. Write DESIGN.md with implementation tasks,
-      interfaces, and relevant failure cases. Preserve existing requirements.
+      Inspect requirements and code. Write task-specific design files under designs/ with implementation tasks,
+      interfaces, and relevant failure cases. Choose descriptive filenames for each feature;
+      revise existing designs only when deliberately updating that same feature.
+      Report the paths in artifacts. Preserve existing requirements.
       Record acceptance labels and check commands in data. Every check must
       terminate with a meaningful exit code. Never register a standalone dev
       server or watch command. For runtime checks use a bounded smoke script
       that starts a service, checks readiness, asserts behavior, and cleans up.
       When repairing a broken check plan, preserve valid checks and the app.
-    completion: DESIGN.md and an executable acceptance contract exist.
+    completion: The reported design artifacts and an executable acceptance contract exist.
     outputs:
       type: object
       additionalProperties: false
-      required: [acceptance, checks]
+      required: [artifacts, acceptance, commands]
       properties:
+        artifacts: {type: array, minItems: 1, uniqueItems: true, items: {type: string, minLength: 1}}
         acceptance: {type: array, minItems: 1, uniqueItems: true, items: {type: string, minLength: 1}}
-        checks: {type: array, minItems: 1, uniqueItems: true, items: {type: string, minLength: 1}}
+        commands: {type: array, minItems: 1, uniqueItems: true, items: {type: string, minLength: 1}}
     append: [acceptance]
-    gate: {files: [DESIGN.md]}
+    gate: {files: plan.artifacts}
     next:
       ready: [build]
       incomplete: [plan, clarify]
@@ -55,19 +58,19 @@ capabilities:
   build:
     purpose: Implement or repair the requested software and tests.
     instructions: >
-      Follow the design and user intent. Implement and test the software with
+      Read the design paths in plan.artifacts when available and follow user intent. Implement and test the software with
       native tools. If fixing failed checks, make focused repairs without
       weakening the acceptance contract. If no design exists, document a
-      concise design first. Record finite commands and acceptance labels in
+      concise task-specific design under designs/ first. Record finite commands and acceptance labels in
       data, preserving existing criteria. Report ready when review can begin.
     completion: Implementation and a terminating check plan are ready.
     outputs:
       type: object
       additionalProperties: false
-      required: [acceptance, checks]
+      required: [acceptance, commands]
       properties:
         acceptance: {type: array, minItems: 1, uniqueItems: true, items: {type: string, minLength: 1}}
-        checks: {type: array, minItems: 1, uniqueItems: true, items: {type: string, minLength: 1}}
+        commands: {type: array, minItems: 1, uniqueItems: true, items: {type: string, minLength: 1}}
     append: [acceptance]
     next:
       ready: [review]
@@ -88,7 +91,7 @@ capabilities:
     tools:
       allow: [read, glob, grep, bash]
       declaredChecksOnly: true
-    gate: {checks: checks, coverage: acceptance}
+    gate: {commands: build.commands, acceptance: build.acceptance}
     next:
       ready: [deliver]
       incomplete: [build, plan]

@@ -76,6 +76,13 @@ types, and dependency deadlocks. It reports warnings for ambiguous settings.
 Add `--host http://127.0.0.1:4096` to compare model and tool names with a running
 OpenCode server. See the configuration guide for analysis limits.
 
+Gate output references must include the producer, for example
+`commands: build.commands` and `acceptance: build.acceptance`. Bare output names are
+rejected. Gates read the named capability's saved outputs, not whichever
+capability last wrote a shared field. Older runs without producer snapshots
+must be restarted from their existing project files; see the migration notes
+in the configuration guide.
+
 There are no fixed capability names, report fields, admission categories,
 recovery labels, or required software-engineering steps. Set `model:
 provider/model` on any capability to override the user's selected OpenCode

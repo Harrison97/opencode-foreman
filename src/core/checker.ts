@@ -1,4 +1,5 @@
 import type { Workflow } from './types.js';
+import { outputReference } from './references.js';
 
 export interface Diagnostic { severity: 'error' | 'warning'; path: string; message: string }
 type Schema = Record<string, any>;
@@ -33,23 +34,29 @@ export function checkWorkflow(w: Workflow, stateLimit = 20000): Diagnostic[] {
       const s = properties(w, id)[key];
       if (!s || types(s).length !== 1 || types(s)[0] !== 'array') emit('error', `${path}.append`, `Declare ${key} as an array in this capability's outputs before appending it.`);
     }
-    if (c.tools?.declaredChecksOnly && !c.gate?.checks) emit('error', `${path}.tools.declaredChecksOnly`, 'Set gate.checks to a declared command-array field, or disable this restriction.');
+    if (c.tools?.declaredChecksOnly && !c.gate?.commands) emit('error', `${path}.tools.declaredChecksOnly`, 'Set gate.commands to a declared command-array field, or disable this restriction.');
     for (const tool of c.tools?.allow ?? []) if (c.tools?.deny?.includes(tool)) emit('warning', `${path}.tools`, `${tool} appears in allow and deny; deny wins. Remove the contradictory entry.`);
     for (const tool of c.tools?.deny ?? []) if (['jev_status', 'jev_report'].includes(tool)) emit('warning', `${path}.tools.deny`, `${tool} is a Foreman control tool and is exempt from these lists.`);
-    if (c.gate?.checks && !['bash', 'shell'].some(t => !c.tools?.deny?.includes(t) && (!c.tools?.allow || c.tools.allow.includes(t)))) emit('error', `${path}.tools`, 'A command gate requires an allowed bash or shell tool to collect native evidence.');
-    for (const kind of ['checks', 'coverage'] as const) {
+    if (c.gate?.commands && !['bash', 'shell'].some(t => !c.tools?.deny?.includes(t) && (!c.tools?.allow || c.tools.allow.includes(t)))) emit('error', `${path}.tools`, 'A command gate requires an allowed bash or shell tool to collect native evidence.');
+    for (const kind of ['commands', 'acceptance', 'files'] as const) {
       const field = c.gate?.[kind];
-      if (!field) continue;
+      if (!field || Array.isArray(field)) continue;
       fields.add(field);
-      const source = producers.get(field) ?? [];
-      if (!source.length) emit('error', `${path}.gate.${kind}`, `No capability declares output ${field}; declare it in a preceding capability's outputs.properties.`);
+      const ref = outputReference(field);
+      if (!ref) { emit('error', `${path}.gate.${kind}`, `Use capability.output, such as build.checks, instead of ${field}.`); continue; }
+      if (!Object.hasOwn(w.capabilities, ref.producer)) { emit('error', `${path}.gate.${kind}`, `Unknown output producer ${ref.producer}; reference an existing capability.`); continue; }
+      if (ref.producer === id && kind !== 'files') emit('error', `${path}.gate.${kind}`, 'A gate must consume an earlier capability output, not its own output.');
+      if (ref.producer === id && kind === 'files' && !(c.outputs?.required as string[] | undefined)?.includes(ref.field))
+        emit('error', `${path}.gate.files`, `Require ${ref.field} in this capability's outputs.required so its submitted paths can be checked.`);
+      const source = (producers.get(ref.field) ?? []).filter(p => p.id === ref.producer);
+      if (!source.length) emit('error', `${path}.gate.${kind}`, `No declared output ${field}; declare ${ref.field} in ${ref.producer}.outputs.properties.`);
       for (const p of source) {
         const t = types(p.schema), item = types(p.schema.items);
-        if (t.length && (t.length !== 1 || t[0] !== 'array') || item.length && (item.length !== 1 || item[0] !== 'string')) emit('error', `${path}.gate.${kind}`, `${p.id}.${field} must be an array of strings; correct its output schema.`);
-        else if (!t.length || !item.length) emit('warning', `${path}.gate.${kind}`, `Cannot prove the type of ${p.id}.${field}; use explicit type: array and items.type: string for static checking.`);
-        if (!(p.schema.minItems >= 1)) emit('warning', `${path}.gate.${kind}`, `${p.id}.${field} permits an empty array, which this gate rejects; set minItems: 1.`);
+        if (t.length && (t.length !== 1 || t[0] !== 'array') || item.length && (item.length !== 1 || item[0] !== 'string')) emit('error', `${path}.gate.${kind}`, `${field} must be an array of strings; correct its output schema.`);
+        else if (!t.length || !item.length) emit('warning', `${path}.gate.${kind}`, `Cannot prove the type of ${field}; use explicit type: array and items.type: string for static checking.`);
+        if (!(p.schema.minItems >= 1)) emit('warning', `${path}.gate.${kind}`, `${field} permits an empty array, which this gate rejects; set minItems: 1.`);
       }
-      if ((c.outputs?.required as string[] | undefined)?.includes(field)) emit('error', `${path}.outputs.required`, `${field} is also consumed by this capability's gate; gated contract fields cannot be overwritten. Produce it earlier instead.`);
+      if (kind !== 'files' && (c.outputs?.required as string[] | undefined)?.includes(ref.field)) emit('error', `${path}.outputs.required`, `${field} is also consumed by this capability's gate; gated contract fields cannot be overwritten. Produce it earlier instead.`);
     }
     if (c.outputs && ['$ref', 'allOf', 'anyOf', 'oneOf', 'if', 'patternProperties'].some(k => k in c.outputs!)) emit('warning', `${path}.outputs`, 'Complex output schemas still validate at runtime; static field analysis uses only top-level properties and required declarations.');
   }
@@ -75,15 +82,17 @@ export function checkWorkflow(w: Workflow, stateLimit = 20000): Diagnostic[] {
     visited.add(key); reached.add(s.id);
     const c = w.capabilities[s.id]!;
     if (c.terminal) { terminal.add(s.id); continue; }
-    for (const kind of ['checks', 'coverage'] as const) {
+    for (const kind of ['commands', 'acceptance', 'files'] as const) {
       const field = c.gate?.[kind];
-      if (field && !s.data.has(field)) emit('error', `capabilities.${s.id}.gate.${kind}`, `${field} is not guaranteed on every entry path. Require it in an earlier producer's outputs.required and prevent transitions that skip that producer.`);
+      if (!field || Array.isArray(field) || kind === 'files' && outputReference(field)?.producer === s.id) continue;
+      if (field && (!s.data.has(field) || !s.done.has(outputReference(field)?.producer ?? ''))) emit('error', `capabilities.${s.id}.gate.${kind}`, `${field} is not guaranteed on every entry path. Require it in an earlier producer's outputs.required and prevent transitions that skip or invalidate that producer.`);
     }
     for (const outcome of ['ready', 'incomplete', 'blocked'] as const) {
       const done = new Set(s.done), data = new Set(s.data);
       if (outcome === 'ready') {
         done.add(s.id);
-        for (const field of (c.outputs?.required as string[] | undefined) ?? []) if (fields.has(field) && Object.hasOwn(properties(w, s.id), field)) data.add(field);
+        for (const field of fields) if (outputReference(field)?.producer === s.id) data.delete(field);
+        for (const field of (c.outputs?.required as string[] | undefined) ?? []) if (fields.has(`${s.id}.${field}`) && Object.hasOwn(properties(w, s.id), field)) data.add(`${s.id}.${field}`);
       } else invalidate(done, s.id);
       const targets = (c.next?.[outcome] ?? []).filter(id => (outcome === 'ready' || !w.capabilities[id]!.terminal) && (w.capabilities[id]!.dependsOn ?? []).every(dep => done.has(dep)));
       if (c.next?.[outcome]?.length && !targets.length) emit('warning', `capabilities.${s.id}.next.${outcome}`, 'A reachable completion state has no eligible next capability; this outcome pauses. Adjust dependencies/transitions if that is unintended.');

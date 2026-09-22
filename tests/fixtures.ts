@@ -16,7 +16,7 @@ export const sample: Workflow = {
       next: { ready: ['proof'], incomplete: ['draft'], blocked: ['draft'] }, },
     proof: { purpose: 'Proofread', instructions: 'Check copy and labels.', completion: 'Evidence is complete',
       dependsOn: ['draft'], tools: { allow: ['read','bash'], declaredChecksOnly: true },
-      gate: { checks: 'checks', coverage: 'labels' },
+      gate: { commands: 'draft.checks', acceptance: 'draft.labels' },
       next: { ready: ['publish'], incomplete: ['draft'], blocked: ['draft'] }, },
     publish: { purpose: 'Deliver copy', instructions: 'Deliver the finished text.', completion: 'Delivered', dependsOn: ['proof'], terminal: true },
   },
