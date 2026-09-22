@@ -1,6 +1,9 @@
 # Foreman
 
-> **Beware of token usage:** Foreman can use a lot of tokens. Each capability, review, and repair loop adds model calls. Monitor your usage, especially on long-running workflows.
+> [!CAUTION]
+> **HIGH TOKEN USAGE**
+>
+> Foreman can use a **lot** of tokens. Each capability, review, and repair loop adds model calls. Monitor your usage, especially on long-running workflows.
 
 Define how your OpenCode agent works using YAML workflows, with Jev choosing
 what happens next.
