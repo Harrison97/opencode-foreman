@@ -6,6 +6,9 @@
 
 <p align="center"><strong>Your agent codes. Foreman keeps it on track.</strong></p>
 
+> [!NOTE]
+> **Powered by [Jev](https://typesafe.ai/).** Jev chooses the next step from the paths your workflow allows. Foreman checks required outputs, saves progress, and manages execution. A Jev API key (`TYPESAFE_API_KEY`) is required.
+
 <p align="center">
   <a href="https://github.com/Harrison97/opencode-foreman/actions/workflows/ci.yml"><img src="https://github.com/Harrison97/opencode-foreman/actions/workflows/ci.yml/badge.svg" alt="CI checks" /></a>
   <a href="https://github.com/Harrison97/opencode-foreman/actions/workflows/pages.yml"><img src="https://github.com/Harrison97/opencode-foreman/actions/workflows/pages.yml/badge.svg" alt="Website deployment" /></a>
