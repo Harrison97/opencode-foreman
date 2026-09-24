@@ -27,10 +27,6 @@ OpenCode performs the work with your existing tools and models. Foreman tracks p
   <img src="docs/assets/workflow.gif" alt="Foreman workflow: plan, build, review, return to build to fix issues, review again, then deliver." width="1000" />
 </p>
 
-[View the static diagram](docs/assets/workflow.png)
-
-_Simplified workflow. The bundled engineering process also includes clarification, design, investigation, checkpoints, and whole-product verification._
-
 ## Why Foreman
 
 | Capability                   | What it gives you                                                  |
