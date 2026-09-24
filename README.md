@@ -1,5 +1,7 @@
 # Foreman
 
+[Website](https://harrison97.github.io/opencode-foreman/) · [Documentation](docs/foreman.md)
+
 > [!CAUTION]
 > **HIGH TOKEN USAGE**
 >
