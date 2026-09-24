@@ -54,8 +54,8 @@
           Foreman manages the next step, so you don’t have to prompt every step.
         </p>
         <div class="pitch-actions">
-          <a class="button primary" href="#get-started"
-            >Install Foreman <span>↓</span></a
+          <button class="button primary" id="open-install" type="button">
+            Install Foreman <span>↗</span></button
           ><a
             class="text-link"
             href="https://github.com/Harrison97/opencode-foreman"
@@ -114,24 +114,25 @@
             ><span class="example-label">EXAMPLE WORKFLOW</span>
           </div>
         </div>
-        <div class="pitch-benefits">
-          <span
-            ><b>Checks before handoff</b> Review and repair are part of the
-            process.</span
-          ><span
-            ><b>Progress you can return to</b> Pause, resume, and see what
-            happened.</span
-          ><span
-            ><b>Your agent, your setup</b> Keep your OpenCode tools and
-            models.</span
-          >
+        <div class="pitch-benefits" aria-label="Key features">
+          <span>Review &amp; repair</span><span>Pause &amp; resume</span
+          ><span>Your tools &amp; models</span>
         </div>
       </section>
-      <section class="install shell" id="get-started">
+    </main>
+    <dialog id="install-dialog" aria-labelledby="install-title">
+      <div class="install">
+        <button
+          id="close-install"
+          type="button"
+          aria-label="Close installation instructions"
+        >
+          Close ×
+        </button>
         <div class="install-top">
           <div>
             <p class="eyebrow">ONE COMMAND TO GET STARTED</p>
-            <h2>Install. Describe your idea. Go.</h2>
+            <h2 id="install-title">Install. Describe your idea. Go.</h2>
             <p>
               Set your Jev API key, restart OpenCode, and ask for what you want
               to build.
@@ -157,32 +158,9 @@
           More review means more model calls. Monitor usage on longer workflows.
           Run the same command again to update.
         </p>
-      </section>
-      <section class="more shell" aria-label="More about Foreman">
-        <details>
-          <summary>Want more control?</summary>
-          <p>
-            Start with the included engineering workflow—no YAML needed. When
-            you want to customize it, define stages, instructions, models, and
-            required checks in your own workflow.
-            <a
-              href="https://github.com/Harrison97/opencode-foreman/blob/main/docs/workflows.md"
-              >Read the workflow guide ↗</a
-            >
-          </p>
-        </details>
-        <details>
-          <summary>What does Foreman actually manage?</summary>
-          <p>
-            OpenCode does the coding. Foreman saves workflow progress, checks
-            required outputs, and manages which step runs next. Jev chooses
-            between the allowed next steps. Small requests can bypass the
-            workflow. Checks make the process inspectable; they don’t guarantee
-            perfect code.
-          </p>
-        </details>
-      </section>
-    </main>
+      </div>
+    </dialog>
+
     <footer class="shell">
       <a class="brand" href="./"
         ><img src="./mark.svg" width="26" height="26" alt="" />foreman<span
@@ -190,7 +168,12 @@
           >.</span
         ></a
       >
-      <p>Give your agent a process.</p>
+      <p>
+        <a
+          href="https://github.com/Harrison97/opencode-foreman/blob/main/docs/workflows.md"
+          >Customize your workflow ↗</a
+        >
+      </p>
       <a href="https://github.com/Harrison97/opencode-foreman"
         >Built in the open ↗</a
       >

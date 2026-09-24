@@ -73,3 +73,11 @@ doc.getElementById("copy-install").addEventListener("click", async () => {
     selection.addRange(range);
   }
 });
+
+const installDialog = doc.getElementById("install-dialog");
+doc
+  .getElementById("open-install")
+  .addEventListener("click", () => installDialog.showModal());
+doc
+  .getElementById("close-install")
+  .addEventListener("click", () => installDialog.close());
