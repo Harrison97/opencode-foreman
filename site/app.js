@@ -1,42 +1,59 @@
 const doc = globalThis.document;
-const steps = {
-  plan: [
-    "01 / PLAN",
-    "Turn the brief into bounded work.",
-    "Establish the design and contracts, then select a manageable assignment with explicit acceptance criteria.",
-    "BRIEF → DESIGN → PLAN",
-  ],
-  build: [
-    "02 / BUILD",
-    "One clear assignment at a time.",
-    "Implement a bounded piece of work. Declare the checks and acceptance criteria that the review stage will verify.",
-    "PLAN → BUILD → REVIEW",
-  ],
-  review: [
-    "03 / REVIEW",
-    "“Done” gets a second look.",
-    "Run fresh checks against the agreed behavior. If the evidence falls short, route back to build, design, or investigation.",
-    "BUILD → REVIEW → REPAIR ↴",
-  ],
-  deliver: [
-    "04 / DELIVER",
-    "Verify the whole, then hand it over.",
-    "Once the required work is verified, check the complete product against the original goals before delivering the result.",
-    "RELEASE → VERIFY → DELIVER",
-  ],
-};
-for (const button of doc.querySelectorAll("[data-step]")) {
-  button.addEventListener("click", () => {
-    for (const option of doc.querySelectorAll("[data-step]"))
-      option.setAttribute("aria-pressed", String(option === button));
-    const values = steps[button.dataset.step];
-    ["step-label", "step-title", "step-description", "step-route"].forEach(
-      (id, index) => {
-        doc.getElementById(id).textContent = values[index];
-      },
+const frames = [
+  { node: "plan", message: "Make a plan before writing code." },
+  { node: "build", message: "Build one manageable piece at a time." },
+  { node: "review", message: "Run checks against the requested behavior." },
+  {
+    node: "build",
+    repair: true,
+    message: "Found an issue? Send it back for a fix.",
+  },
+  { node: "review", message: "Review the fix before moving on." },
+  { node: "deliver", message: "Verify the result, then hand it over." },
+];
+const motion = globalThis.matchMedia("(prefers-reduced-motion: reduce)");
+const diagram = doc.querySelector(".flow-demo");
+const toggle = doc.getElementById("toggle-animation");
+let paused = motion.matches;
+let frame = 0;
+let timer;
+function renderFrame() {
+  const current = frames[frame];
+  for (const node of doc.querySelectorAll("[data-node]")) {
+    node.classList.toggle("is-active", node.dataset.node === current.node);
+  }
+  for (const edge of doc.querySelectorAll("[data-edge]")) {
+    edge.classList.toggle(
+      "is-active",
+      !current.repair && edge.dataset.edge === current.node,
     );
-  });
+  }
+  diagram.classList.toggle("is-repairing", Boolean(current.repair));
+  doc.getElementById("flow-message").textContent = current.message;
 }
+function schedule() {
+  globalThis.clearInterval(timer);
+  toggle.textContent = paused ? "Play animation" : "Pause animation";
+  toggle.setAttribute("aria-pressed", String(paused));
+  diagram.classList.toggle("is-paused", paused);
+  if (!paused && !doc.hidden) {
+    timer = globalThis.setInterval(() => {
+      frame = (frame + 1) % frames.length;
+      renderFrame();
+    }, 1800);
+  }
+}
+toggle.addEventListener("click", () => {
+  paused = !paused;
+  schedule();
+});
+motion.addEventListener("change", () => {
+  paused = motion.matches;
+  schedule();
+});
+doc.addEventListener("visibilitychange", schedule);
+renderFrame();
+schedule();
 doc.getElementById("copy-install").addEventListener("click", async () => {
   const status = doc.getElementById("copy-status");
   try {
