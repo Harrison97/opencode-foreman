@@ -205,8 +205,8 @@ try {
       version: 1,
       name: "greeting-editor",
       admission: {
-        instructions:
-          "Use compose for requested greetings. BYPASS unrelated requests.",
+        when: "Requested greetings.",
+        bypass: "Unrelated requests.",
         entries: ["compose"],
       },
       capabilities: {

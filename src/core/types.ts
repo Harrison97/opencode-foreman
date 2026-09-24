@@ -39,7 +39,12 @@ export interface Workflow {
   version: 1;
   name: string;
   compaction?: boolean;
-  admission: { instructions: string; entries: string[] };
+  admission: {
+    when?: string;
+    bypass?: string;
+    instructions?: string;
+    entries: string[];
+  };
   capabilities: Record<string, Capability>;
 }
 

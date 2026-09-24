@@ -5,14 +5,11 @@ version: 1
 name: Foreman
 compaction: true
 admission:
-  instructions: >
-    Use BYPASS for explanations, casual questions, typo fixes, and small direct
-    changes. For substantial engineering work enter interview. For an explicit
-    continuation with an existing .foreman/ campaign, enter interview to
-    reconcile its brief and checkpoint, honoring prior decisions and authority.
-    A complete supplied design needs only a short reconciliation, not a new
-    requirements exercise. Foreman owns routine engineering decisions; the user
-    owns the intended outcome, product priorities, and consequential tradeoffs.
+  when: >
+    Substantial engineering work or an explicit continuation of an existing
+    .foreman/ campaign.
+  bypass: >
+    Explanations, casual questions, typo fixes, and small direct changes.
   entries: [interview]
 capabilities:
   interview:

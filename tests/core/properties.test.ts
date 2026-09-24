@@ -130,7 +130,7 @@ test("property: shared graph functions agree with checker on generated dependenc
       const w = {
         version: 1 as const,
         name: "chain",
-        admission: { instructions: "run", entries: ["c0"] },
+        admission: { when: "run", entries: ["c0"] },
         capabilities: Object.fromEntries(
           Array.from({ length }, (_, i) => [
             "c" + i,

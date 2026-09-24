@@ -8,8 +8,8 @@ export const sample: Workflow = {
   version: 1,
   name: "editorial",
   admission: {
-    instructions:
-      "Use the editorial workflow for substantial writing; BYPASS casual questions.",
+    when: "Substantial writing requests.",
+    bypass: "Casual questions.",
     entries: ["draft"],
   },
   capabilities: {

@@ -76,10 +76,12 @@ These are chat messages/UI commands, not shell commands. The agent uses
 
 Foreman supports one project configuration: **`foreman.workflow.yaml`**, in the
 directory where OpenCode starts. There is no home-directory workflow discovery.
-Download the default to customize it, or write your own:
+To customize the default, copy the complete `src/workflows/software-engineer/`
+directory from this repository into your project as `workflows/software-engineer/`,
+including its `prompts/` files. Point your project configuration at that copy:
 
-```sh
-curl --fail --location --output foreman.workflow.yaml https://raw.githubusercontent.com/Harrison97/opencode-foreman/refs/heads/main/src/workflows/software-engineer/workflow.yaml
+```yaml
+source: workflows/software-engineer/workflow.yaml
 ```
 
 A minimal complete workflow:
@@ -88,7 +90,8 @@ A minimal complete workflow:
 version: 1
 name: Writing assistant
 admission:
-  instructions: Use this workflow for substantial writing projects; bypass unrelated requests.
+  when: Substantial writing projects.
+  bypass: Unrelated requests.
   entries: [draft]
 capabilities:
   draft:

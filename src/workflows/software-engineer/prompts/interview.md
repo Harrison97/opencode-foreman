@@ -4,7 +4,9 @@ tradeoffs and authority. Scale depth to uncertainty. Do not manufacture process.
 
 Read the repository, supplied guidance and .foreman/ artifacts first. Reconcile
 interrupted work against files, tests and operation receipts before replaying
-side effects. Preserve prior decisions and authorization.
+side effects. Preserve prior decisions and authorization. For a continuation,
+reconcile the existing brief and checkpoint. A complete supplied design needs only
+a short reconciliation, not a new requirements exercise.
 
 Start with the user's problem and a concrete usage scenario. Establish users,
 desired experience, scope/non-goals, constraints, deployment and observable success

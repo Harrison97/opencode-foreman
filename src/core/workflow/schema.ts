@@ -32,8 +32,14 @@ const schema = {
     admission: {
       type: "object",
       additionalProperties: false,
-      required: ["instructions", "entries"],
+      required: ["entries"],
+      anyOf: [
+        { properties: { when: string }, required: ["when"] },
+        { properties: { instructions: string }, required: ["instructions"] },
+      ],
       properties: {
+        when: string,
+        bypass: string,
         instructions: string,
         entries: { ...strings, minItems: 1 },
       },

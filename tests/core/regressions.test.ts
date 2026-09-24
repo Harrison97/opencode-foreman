@@ -241,6 +241,8 @@ test("aborting backoff cancels retries without an extra request", async () => {
 
 test("routing budgets account for JSON escaping in workflow text", async () => {
   const w = structuredClone(sample);
+  w.admission.when = "\u0001".repeat(24000);
+  w.admission.bypass = "\u0001".repeat(24000);
   w.admission.instructions = "\u0001".repeat(24000);
   w.capabilities.draft!.purpose = "\u0001".repeat(24000);
   const f = await fixture(w);

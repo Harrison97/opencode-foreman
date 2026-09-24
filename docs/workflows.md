@@ -13,7 +13,8 @@ Its campaign stages and boxes are work artifacts, not another runtime capability
 version: 1
 name: my-workflow
 admission:
-  instructions: Use draft for substantial writing; bypass questions or small edits.
+  when: Substantial writing requests.
+  bypass: Questions or small edits.
   entries: [draft]
 capabilities:
   draft:
@@ -51,16 +52,28 @@ capability registry.
 | `version`                | Yes      | Workflow schema version; currently `1`.                                                    |
 | `name`                   | Yes      | Display name for the workflow.                                                             |
 | `compaction`             | No       | `true` summarizes the session on every capability change; `false` or omission disables it. |
-| `admission.instructions` | Yes      | Describe which requests fit and how to choose an entry.                                    |
+| `admission.when`         | Yes*     | Describe which requests should enter the workflow.                                         |
+| `admission.bypass`       | No       | Describe requests handled normally; defaults to a generic bypass description.              |
+| `admission.instructions` | No       | Additional routing guidance, such as how to choose among entry capabilities.               |
 | `admission.entries`      | Yes      | Nonempty list of candidate starting capability IDs.                                        |
 | `capabilities`           | Yes      | Map of capability IDs to their definitions.                                                |
 | `imports`                | No       | Local capability libraries resolved by the loader.                                         |
 
-The current field is `admission.instructions`, not `when`. `entries` supplies the
-possible starting points; it is not a sequence to execute. Entry capabilities
-cannot be terminal or have prerequisites. Jev also receives a built-in bypass
-option for ordinary requests; you do not define a bypass capability. Describe the
-intended scope plainly. Explicit `foreman:` requests exclude bypass.
+`when` supplies workflow entry conditions; `bypass` supplies the criteria for the
+built-in BYPASS choice. Optional `instructions` adds routing guidance. These are
+plain strings sent to the routing model in one admission call, not executable
+predicates or instructions for the working agent. Put execution guidance in the
+appropriate capability's instructions.
+
+`entries` lists possible starting points; it is not a sequence. Entry capabilities
+cannot be terminal or have prerequisites. Explicit `foreman:` requests exclude
+BYPASS regardless of its criteria. Subsequent capability transitions do not use
+admission guidance.
+
+*For compatibility, existing workflows may use `instructions` without `when`.
+At least one of these fields is required. Existing instructions-only definitions,
+including snapshots in saved runs, retain their routing behavior. New workflows
+should use `when` and reserve `instructions` for additional routing guidance.
 
 With `compaction: true`, Foreman asks OpenCode to summarize the session before
 continuing into each different capability, including terminal delivery. It does
@@ -160,7 +173,8 @@ are your choice; references must name their producer.
 version: 1
 name: Checked implementation
 admission:
-  instructions: Use build for implementing software changes with executable checks; bypass unrelated requests.
+  when: Implementing software changes with executable checks.
+  bypass: Unrelated requests.
   entries: [build]
 capabilities:
   build:

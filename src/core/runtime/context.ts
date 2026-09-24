@@ -124,7 +124,8 @@ export function decisionPrompt(workflow: Workflow, request: DecisionRequest) {
       id,
       boundedText(
         id === "BYPASS"
-          ? "Handle normally without this workflow"
+          ? (workflow.admission.bypass ??
+              "Handle normally without this workflow")
           : workflow.capabilities[id]!.purpose,
         each,
       ),
@@ -132,10 +133,28 @@ export function decisionPrompt(workflow: Workflow, request: DecisionRequest) {
   );
   const instructions = boundedText(
     request.gate === "admission"
-      ? workflow.admission.instructions
+      ? admissionInstructions(workflow, request.choices.includes("BYPASS"))
       : "Choose the next useful capability among ONLY the eligible options. Use the latest user guidance, outcome and evidence. Avoid repeating unchanged work.",
     2000,
   );
 
   return { criteria, instructions };
+}
+
+function admissionInstructions(workflow: Workflow, canBypass: boolean): string {
+  const { when, instructions } = workflow.admission;
+  // Preserve instructions-only workflows, including definitions pinned in saved runs.
+  if (!when) return instructions!;
+
+  return [
+    canBypass
+      ? "Choose ONLY among available options using the entry conditions and BYPASS criteria."
+      : "Workflow use was explicitly requested. Choose ONLY among available entries.",
+    "Enter workflow when: " + boundedText(when, instructions ? 900 : 1800),
+    instructions
+      ? "Routing guidance: " + boundedText(instructions, 900)
+      : undefined,
+  ]
+    .filter(Boolean)
+    .join("\n");
 }

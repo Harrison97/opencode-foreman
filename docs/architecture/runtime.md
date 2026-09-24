@@ -21,7 +21,8 @@ an in-progress contract. State version 3 uses an explicit phase union: working,
 reported, deciding, dispatching, delivering, paused, complete, or bypassed.
 Supported version-2 state migrates with an original backup; unsupported legacy
 state fails explicitly without being overwritten. Explicit `foreman:` admission excludes bypass from Jev’s choices;
-automatic admission is decided using the workflow's own admission instructions.
+automatic admission uses the workflow's `admission.when`, `admission.bypass` and
+optional routing `admission.instructions` in one decision call.
 
 Jev only receives eligible choices from the configured outcome transitions and
 dependency graph. The highest-probability legal option wins without a confidence
