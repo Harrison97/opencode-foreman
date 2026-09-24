@@ -23,11 +23,11 @@ Foreman is an **OpenCode plugin for structured, persistent workflows**. Describe
 
 OpenCode performs the work with your existing tools and models. Foreman tracks progress, checks required outputs, and manages the next step—with Jev choosing between allowed transitions.
 
-```mermaid
-flowchart LR
-    Plan --> Build --> Review --> Deliver
-    Review -->|Needs repair| Build
-```
+<p align="center">
+  <img src="docs/assets/workflow.gif" alt="Foreman workflow: plan, build, review, return to build to fix issues, review again, then deliver." width="1000" />
+</p>
+
+[View the static diagram](docs/assets/workflow.png)
 
 _Simplified workflow. The bundled engineering process also includes clarification, design, investigation, checkpoints, and whole-product verification._
 
