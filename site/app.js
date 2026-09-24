@@ -41,7 +41,10 @@ doc.getElementById("copy-install").addEventListener("click", async () => {
   const status = doc.getElementById("copy-status");
   try {
     await globalThis.navigator.clipboard.writeText(
-      doc.getElementById("install-command").textContent.trim(),
+      doc
+        .getElementById("install-command")
+        .textContent.replace(/\s+/g, " ")
+        .trim(),
     );
     status.textContent = "Install command copied.";
   } catch {

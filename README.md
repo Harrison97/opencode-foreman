@@ -30,16 +30,32 @@ Requires Node.js 22.13+ on 22.x or 24+, an installed OpenCode, and `TYPESAFE_API
 in its environment. Keep keys out of YAML.
 The adapter is tested with OpenCode 1.18.31 using plugin SDK 1.18.30.
 
-From the directory where you want to keep Foreman, run:
+On macOS or Linux (including WSL), run:
 
 ```sh
-git clone https://github.com/Harrison97/opencode-foreman.git && (cd opencode-foreman && npm ci && npm run install:local)
+curl -fsSL https://harrison97.github.io/opencode-foreman/install.sh | bash
 ```
 
-Already cloned it? Run `npm ci && npm run install:local` inside the checkout.
-The install command builds the plugin and registers it with OpenCode, including
-its terminal trace UI. Keep the checkout in place: the installation points to its
-compiled files. Restart OpenCode after installation.
+Requires Git and npm as well as the prerequisites above. The installer downloads,
+builds, and registers Foreman and its terminal trace UI. Restart OpenCode afterward.
+Run the same command again to update.
+
+The managed installation lives in `${XDG_DATA_HOME:-$HOME/.local/share}/opencode-foreman`.
+Set `FOREMAN_INSTALL_DIR` to an absolute path to choose another location; when piping,
+pass it to Bash: `curl -fsSL https://harrison97.github.io/opencode-foreman/install.sh | FOREMAN_INSTALL_DIR=/your/path bash`.
+Updates replace this managed directory, so keep custom workflows in your projects.
+Existing OpenCode settings are preserved. You can [inspect the installer](site/install.sh)
+before running it.
+
+For development or a manually managed checkout:
+
+```sh
+git clone https://github.com/Harrison97/opencode-foreman.git
+cd opencode-foreman
+npm ci && npm run install:local
+```
+
+Keep that checkout in place: the local installation points to its compiled files.
 
 Make `TYPESAFE_API_KEY` available to the shell or launcher that starts OpenCode. Configure
 your coding model in OpenCode as usual; Foreman uses those existing credentials.

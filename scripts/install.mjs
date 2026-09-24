@@ -19,8 +19,6 @@ try {
 } catch (e) {
   if (e.code !== "ENOENT") throw e;
 }
-await writeFile(path, content, { mode: 0o600 });
-console.log(`Installed ${path}\nRestart OpenCode to load the plugin.`);
 
 // UI plugins are registered separately; putting this module in plugins/ would
 // incorrectly ask the server to load a TUI-only module.
@@ -51,6 +49,9 @@ if (
     "Invalid TUI configuration; preserved without changes: " + tuiPath,
   );
 }
+await writeFile(path, content, { mode: 0o600 });
+console.log(`Installed ${path}\nRestart OpenCode to load the plugin.`);
+
 const target = pathToFileURL(join(root, "dist/opencode/tui.jsx")).href;
 const plugins = config.plugin ?? [];
 if (

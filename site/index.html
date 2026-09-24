@@ -231,23 +231,22 @@
             <h2>Start with an idea.</h2>
             <p>
               Install Foreman, restart OpenCode, and describe what you want to
-              build.
+              build. Run the same command again to update.
             </p>
           </div>
           <span class="install-arrow" aria-hidden="true">↗</span>
         </div>
         <div class="install-command">
-          <code id="install-command"
-            >git clone https://github.com/Harrison97/opencode-foreman.git
-            &amp;&amp; (cd opencode-foreman &amp;&amp; npm ci &amp;&amp; npm run
-            install:local)</code
-          ><button id="copy-install" aria-label="Copy install command">
+          <!-- prettier-ignore -->
+          <code id="install-command">curl -fsSL https://harrison97.github.io/opencode-foreman/install.sh | bash</code>
+          <button id="copy-install" aria-label="Copy install command">
             Copy ↗
           </button>
         </div>
         <p id="copy-status" role="status"></p>
         <p class="requirements">
-          Requires OpenCode, Node.js 22.13+ on 22.x or 24+, and a
+          macOS / Linux / WSL. Requires Git, npm, OpenCode, Node.js 22.13+ on
+          22.x or 24+, and a
           <code>TYPESAFE_API_KEY</code> for Jev routing.
           <a href="https://github.com/Harrison97/opencode-foreman#install"
             >Setup instructions ↗</a
