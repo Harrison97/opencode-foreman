@@ -3,6 +3,7 @@
 # model to a configured provider/model. Named role resolution is not supported yet.
 version: 1
 name: Foreman
+compaction: true
 admission:
   instructions: >
     Use BYPASS for explanations, casual questions, typo fixes, and small direct

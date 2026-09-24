@@ -8,12 +8,14 @@ import { ForemanPlugin } from "../../src/opencode/plugin.js";
 import { UsageLog, summarizeUsage } from "../../src/jev/usage.js";
 import { fixture, sample, ready } from "../support/fixtures.js";
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
-async function setup() {
-  const w = structuredClone(sample);
+async function setup(workflow = sample) {
+  const w = structuredClone(workflow);
   w.capabilities.proof!.model = "test/reviewer";
   const f = await fixture(w);
   await writeFile(join(f.root, "foreman.workflow.yaml"), YAML.stringify(w));
   const prompts: any[] = [];
+  const operations: string[] = [];
+  const summaries: any[] = [];
   const logs: any[] = [];
   const toasts: any[] = [];
   const plugin = await ForemanPlugin({
@@ -44,7 +46,13 @@ async function setup() {
             },
           ],
         }),
+        summarize: async (x: any) => {
+          operations.push("summarize");
+          summaries.push(x);
+          return { data: true };
+        },
         promptAsync: async (x: any) => {
+          operations.push("prompt");
           prompts.push(x);
           return {};
         },
@@ -57,7 +65,7 @@ async function setup() {
       },
     },
   } as any);
-  return { ...f, plugin, prompts, logs, toasts };
+  return { ...f, plugin, prompts, summaries, operations, logs, toasts };
 }
 test("OpenCode hooks load custom YAML, inject capabilities, collect native evidence and strip keys", async () => {
   const f = await setup();
@@ -110,7 +118,7 @@ test("OpenCode hooks load custom YAML, inject capabilities, collect native evide
   }
 });
 test("accepted report drives real adapter idle continuation, routed model, usage, and no recursive admission", async () => {
-  const f = await setup();
+  const f = await setup({ ...sample, compaction: true });
   const fetcher = globalThis.fetch;
   const key = process.env.TYPESAFE_API_KEY;
   process.env.TYPESAFE_API_KEY = "fake-adapter-key";
@@ -142,6 +150,12 @@ test("accepted report drives real adapter idle continuation, routed model, usage
     } as any);
     for (let n = 0; n < 40 && !f.prompts.length; n++) await delay(25);
     assert.equal(f.prompts.length, 1);
+    assert.equal(f.summaries.length, 1);
+    assert.deepEqual(f.operations.slice(0, 2), ["summarize", "prompt"]);
+    assert.deepEqual(f.summaries[0].body, {
+      providerID: "test",
+      modelID: "reviewer",
+    });
     assert.ok(f.toasts.some((t) => t.body.title === "Jev connected"));
     assert.deepEqual(f.prompts[0].body.model, {
       providerID: "test",

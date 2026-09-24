@@ -38,6 +38,7 @@ export interface Capability {
 export interface Workflow {
   version: 1;
   name: string;
+  compaction?: boolean;
   admission: { instructions: string; entries: string[] };
   capabilities: Record<string, Capability>;
 }
@@ -74,6 +75,8 @@ export interface Delivery {
   id: string;
   text: string;
   terminal: boolean;
+  stageBoundary?: boolean;
+  compactionAttempted?: boolean;
   lease?: { owner: string; pid: number; expiresAt: number };
 }
 

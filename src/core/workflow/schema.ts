@@ -28,6 +28,7 @@ const schema = {
   properties: {
     version: { const: 1 },
     name: string,
+    compaction: { type: "boolean" },
     admission: {
       type: "object",
       additionalProperties: false,

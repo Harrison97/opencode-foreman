@@ -43,6 +43,38 @@ test("custom names, dependencies, legal transitions, and terminal evidence", asy
   assert.equal(end?.capability, "publish");
   assert.equal(end?.history.at(-1)?.source, "guard");
 });
+
+test("enabled compaction is durable at stage changes and excludes same-capability repairs", async () => {
+  const workflow = structuredClone(sample);
+  workflow.compaction = true;
+  const f = await fixture(workflow);
+
+  await f.c.report("s", ready);
+  const next = await f.c.gate("s", "accepted");
+  assert.equal(next?.phase.kind, "dispatching");
+  if (next?.phase.kind !== "dispatching") throw new Error("Expected delivery");
+  assert.equal(next.phase.delivery.stageBoundary, true);
+
+  const marked = await f.c.compactionAttempted("s", next.phase.delivery.id);
+  assert.equal(marked?.phase.kind, "dispatching");
+  if (marked?.phase.kind !== "dispatching")
+    throw new Error("Expected delivery");
+  assert.equal(marked.phase.delivery.compactionAttempted, true);
+  await f.c.compactionAttempted("s", next.phase.delivery.id);
+  assert.equal((await f.state()).phase.kind, "dispatching");
+
+  const retry = await fixture(workflow);
+  await retry.c.report("s", {
+    summary: "Repair this stage",
+    outcome: "incomplete",
+  });
+  const same = await retry.c.gate("s", "repair");
+  assert.equal(same?.phase.kind, "dispatching");
+  if (same?.phase.kind !== "dispatching")
+    throw new Error("Expected repair delivery");
+  assert.equal(same.phase.delivery.stageBoundary, false);
+});
+
 test("rejected output and coverage reports are atomic and corrected without rerunning checks", async () => {
   const f = await fixture();
   const before = await f.state();

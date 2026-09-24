@@ -587,6 +587,10 @@ export class Controller {
     return this.commitEvent(id, { type: "received", messageID });
   }
 
+  async compactionAttempted(id: string, messageID: string) {
+    return this.commitEvent(id, { type: "compactionAttempted", messageID });
+  }
+
   async finished(
     id: string,
     messageID: string,

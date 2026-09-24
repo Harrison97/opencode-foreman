@@ -15,6 +15,8 @@ test("bundled software workflow uses the same parser and has one capability laye
     resolve("src/workflows/software-engineer/workflow.yaml"),
   );
   assert.equal(w.name, "Foreman");
+  assert.equal(w.compaction, true);
+  assert.equal(parseWorkflow({ ...w, compaction: false }).compaction, false);
   assert.equal(w.capabilities.review!.gate?.commands, "build.commands");
   assert.equal(w.capabilities.review!.model, undefined);
   assert.equal(Object.hasOwn(w, "stages"), false);
@@ -29,6 +31,7 @@ test("schema rejects unknown semantics, references, dependency cycles, and inval
     (w) => (w.capabilities.proof.model = "bad model"),
     (w) => (w.capabilities.proof.gate = { acceptance: "labels" }),
     (w) => (w.admission.fallback = "publish"),
+    (w) => (w.compaction = "every-turn"),
     (w) =>
       (w.capabilities.draft.outputs = { type: "object", unknownKeyword: true }),
     (w) =>

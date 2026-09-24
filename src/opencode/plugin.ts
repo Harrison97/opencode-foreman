@@ -176,6 +176,44 @@ export const ForemanPlugin: Plugin = async ({ directory, client }) => {
         )
           return "waiting";
 
+        const boundary = latest.phase.delivery;
+        if (
+          latest.workflow.compaction === true &&
+          boundary.stageBoundary &&
+          !boundary.compactionAttempted
+        ) {
+          const model = await selectModel(latest);
+          if (model) {
+            try {
+              const compacted = await client.session.summarize({
+                path: { id: sessionID },
+                query: { directory },
+                body: { providerID: model.providerID, modelID: model.modelID },
+              });
+              if (compacted.error)
+                await log(
+                  "Stage-boundary compaction failed; continuing without it.",
+                );
+            } catch {
+              await log(
+                "Stage-boundary compaction failed; continuing without it.",
+              );
+            }
+          }
+
+          const recorded = await controller.compactionAttempted(
+            sessionID,
+            delivery.id,
+          );
+          if (
+            recorded?.phase.kind !== "dispatching" ||
+            !recorded.phase.delivery.compactionAttempted
+          )
+            throw new Error(
+              "Could not persist stage-boundary compaction state",
+            );
+        }
+
         const sent = await client.session.promptAsync({
           path: { id: sessionID },
           query: { directory },

@@ -26,6 +26,8 @@ const delivery = obj(["id", "text", "terminal"], {
   id: str,
   text: str,
   terminal: { type: "boolean" },
+  stageBoundary: { type: "boolean" },
+  compactionAttempted: { type: "boolean" },
   lease: obj(["owner", "pid", "expiresAt"], {
     owner: str,
     pid: int,

@@ -46,20 +46,29 @@ capability registry.
 
 ## Top-level fields and admission
 
-| Field                    | Required | Meaning                                                 |
-| ------------------------ | -------- | ------------------------------------------------------- |
-| `version`                | Yes      | Workflow schema version; currently `1`.                 |
-| `name`                   | Yes      | Display name for the workflow.                          |
-| `admission.instructions` | Yes      | Describe which requests fit and how to choose an entry. |
-| `admission.entries`      | Yes      | Nonempty list of candidate starting capability IDs.     |
-| `capabilities`           | Yes      | Map of capability IDs to their definitions.             |
-| `imports`                | No       | Local capability libraries resolved by the loader.      |
+| Field                    | Required | Meaning                                                                                    |
+| ------------------------ | -------- | ------------------------------------------------------------------------------------------ |
+| `version`                | Yes      | Workflow schema version; currently `1`.                                                    |
+| `name`                   | Yes      | Display name for the workflow.                                                             |
+| `compaction`             | No       | `true` summarizes the session on every capability change; `false` or omission disables it. |
+| `admission.instructions` | Yes      | Describe which requests fit and how to choose an entry.                                    |
+| `admission.entries`      | Yes      | Nonempty list of candidate starting capability IDs.                                        |
+| `capabilities`           | Yes      | Map of capability IDs to their definitions.                                                |
+| `imports`                | No       | Local capability libraries resolved by the loader.                                         |
 
 The current field is `admission.instructions`, not `when`. `entries` supplies the
 possible starting points; it is not a sequence to execute. Entry capabilities
 cannot be terminal or have prerequisites. Jev also receives a built-in bypass
 option for ordinary requests; you do not define a bypass capability. Describe the
 intended scope plainly. Explicit `foreman:` requests exclude bypass.
+
+With `compaction: true`, Foreman asks OpenCode to summarize the session before
+continuing into each different capability, including terminal delivery. It does
+not compact after an incomplete report that retries the same capability. The
+summary is best-effort: a compaction error is logged and work continues. Saved
+workflow state, reports and project artifacts remain available to later stages.
+Compaction is lossy, so keep important decisions and evidence in those durable
+outputs rather than relying on conversation history alone.
 
 Only the project-root `foreman.workflow.yaml` is discovered. Without it, the bundled
 default is used. There is no search through home directories or workflow folders.

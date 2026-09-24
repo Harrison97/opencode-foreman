@@ -21,6 +21,7 @@ export type Event =
   | { type: "pause"; reason: string }
   | { type: "resume"; guidance?: string; inputMessageID?: string }
   | { type: "received"; messageID: string; actualID?: string }
+  | { type: "compactionAttempted"; messageID: string }
   | { type: "queue" }
   | { type: "retryDelivery"; messageID: string }
   | { type: "finished"; messageID: string; parentID: string; error?: string }
@@ -77,6 +78,7 @@ function enter(
   const delivery = {
     id: context.messageID,
     terminal,
+    stageBoundary: previous !== id,
     text: terminal
       ? "[Foreman] Deliver the final response following this capability. No more tools."
       : "[Foreman] Continue the current goal in the selected capability. Submit foreman_report and finish the response.",
@@ -129,6 +131,8 @@ function applyEvent(
       return onResume(state, event, context);
     case "received":
       return onReceived(state, event);
+    case "compactionAttempted":
+      return onCompactionAttempted(state, event);
     case "retryDelivery":
       return onRetryDelivery(state, event);
     case "queue":
@@ -427,6 +431,25 @@ function onReceived(
         },
       }
     : { kind: "working", inputMessageID: event.actualID ?? phase.delivery.id };
+
+  return true;
+}
+
+function onCompactionAttempted(
+  state: WorkflowState,
+  event: Extract<Event, { type: "compactionAttempted" }>,
+): boolean {
+  const phase = state.phase;
+
+  if (
+    phase.kind !== "dispatching" ||
+    phase.delivery.id !== event.messageID ||
+    !phase.delivery.stageBoundary ||
+    phase.delivery.compactionAttempted
+  )
+    return false;
+
+  phase.delivery.compactionAttempted = true;
 
   return true;
 }

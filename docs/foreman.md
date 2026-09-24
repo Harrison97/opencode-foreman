@@ -5,6 +5,8 @@ Foreman's personality and process. Its engineering process lives in YAML. The ru
 Projects without `foreman.workflow.yaml` load this default. To customize it, copy
 that file into the project as `foreman.workflow.yaml` and restart OpenCode. Existing
 campaigns retain their pinned definition; a source update does not rewrite them.
+The default enables session compaction at every capability change. Set
+`compaction: false` in a project workflow to disable it for new campaigns.
 
 Start with an idea, for example:
 
