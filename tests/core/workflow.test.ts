@@ -19,6 +19,8 @@ test("bundled software workflow uses the same parser and has one capability laye
   assert.equal(parseWorkflow({ ...w, compaction: false }).compaction, false);
   assert.equal(w.capabilities.review!.gate?.commands, "build.commands");
   assert.equal(w.capabilities.review!.model, undefined);
+  assert.match(w.capabilities.investigate!.instructions, /root cause/);
+  assert.match(w.capabilities.review!.instructions, /complexity/);
   assert.equal(Object.hasOwn(w, "stages"), false);
 });
 test("schema rejects unknown semantics, references, dependency cycles, and invalid models", () => {

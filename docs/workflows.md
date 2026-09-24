@@ -70,6 +70,10 @@ workflow state, reports and project artifacts remain available to later stages.
 Compaction is lossy, so keep important decisions and evidence in those durable
 outputs rather than relying on conversation history alone.
 
+An `instructions: {file: ...}` reference loads the complete file into that
+capability's instructions. It helps organize and reuse longer workflow text; it
+does not defer loading or reduce the prompt size.
+
 Only the project-root `foreman.workflow.yaml` is discovered. Without it, the bundled
 default is used. There is no search through home directories or workflow folders.
 A file containing only `source: ../workflows/example.yaml` selects another local
@@ -99,7 +103,7 @@ they do not silently select a default capability.
 | Field                    | Meaning                                                                                                          |
 | ------------------------ | ---------------------------------------------------------------------------------------------------------------- |
 | purpose                  | Short description supplied to Jev for selection.                                                                 |
-| instructions             | Agent instructions, inline or `{file: prompts/draft.md}`.                                                        |
+| instructions             | Agent instructions, inline or loaded from a workflow-package file such as `{file: prompts/draft.md}`.            |
 | completion               | Prose criteria for the agent; use gates for mechanical checks.                                                   |
 | model                    | Optional OpenCode `provider/model`; defaults to selected host model.                                             |
 | outputs                  | JSON Schema for a ready report's `data`, inline or `{file: schemas/output.json}`.                                |
