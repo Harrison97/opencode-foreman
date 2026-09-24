@@ -17,6 +17,20 @@ export function gateInputs(state: WorkflowState) {
 export function workflowInstructions(state: WorkflowState) {
   const capability = state.workflow.capabilities[state.capability]!;
   const view = viewState(state);
+  const outputProperties = capability.outputs?.properties;
+  const commandsAreGated =
+    outputProperties &&
+    typeof outputProperties === "object" &&
+    Object.hasOwn(outputProperties, "commands") &&
+    Object.values(state.workflow.capabilities).some((candidate) => {
+      const reference = candidate.gate?.commands
+        ? outputReference(candidate.gate.commands)
+        : undefined;
+      return (
+        reference?.producer === state.capability &&
+        reference.field === "commands"
+      );
+    });
 
   return [
     "Foreman workflow: " + state.workflow.name,
@@ -27,6 +41,9 @@ export function workflowInstructions(state: WorkflowState) {
     "Completion: " + capability.completion,
     "Output JSON schema: " + JSON.stringify(capability.outputs ?? null),
     "Tool rules: " + JSON.stringify(capability.tools ?? {}),
+    commandsAreGated
+      ? "Commands contract: every commands item is a finite, directly runnable shell command from the project root. Put manual actions such as opening or visually inspecting a page in acceptance or documentation, not commands. Do not put prose instructions in commands."
+      : undefined,
     "Required gates: " + JSON.stringify(capability.gate ?? {}),
     "Required gate inputs: " + JSON.stringify(gateInputs(state)),
     capability.outputs

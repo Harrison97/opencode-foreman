@@ -78,6 +78,7 @@ test("OpenCode hooks load custom YAML, inject capabilities, collect native evide
       context,
     );
     assert.equal(context.context.length, 1);
+    assert.match(context.context[0]!, /CURRENT CAPABILITY: draft/);
     await f.c.report("s", ready);
     const next = await f.c.gate("s", "draft");
     await f.c.admit("s", "continue", next!.pending!.id, true);
@@ -147,9 +148,19 @@ test("accepted report drives real adapter idle continuation, routed model, usage
       modelID: "reviewer",
     });
     assert.equal(f.prompts[0].body.parts[0].synthetic, true);
-    assert.match(f.prompts[0].body.parts[0].text, /CURRENT CAPABILITY: proof/);
-    assert.match(f.prompts[0].body.parts[0].text, /node --test/);
-    assert.match(f.prompts[0].body.parts[0].text, /Omit data/);
+    assert.doesNotMatch(
+      f.prompts[0].body.parts[0].text,
+      /CURRENT CAPABILITY:|Output JSON schema:|Required gates:/,
+    );
+    assert.match(f.prompts[0].body.parts[0].text, /Continue the current goal/);
+    const system = { system: [] as string[] };
+    await f.plugin["experimental.chat.system.transform"]!(
+      { sessionID: "s" } as any,
+      system,
+    );
+    assert.match(system.system[0]!, /CURRENT CAPABILITY: proof/);
+    assert.match(system.system[0]!, /Omit data/);
+    assert.match(system.system[0]!, /node --test/);
     await f.plugin["chat.message"]!({ sessionID: "s" }, {
       message: { id: f.prompts[0].body.messageID },
       parts: f.prompts[0].body.parts,
@@ -322,7 +333,16 @@ test("status stays focused and rejected reports explain the active contract", as
     assert.deepEqual(output.output, ready.data);
     await assert.rejects(
       f.plugin.tool!.foreman_report!.execute(ready, { sessionID: "s" } as any),
-      /CURRENT CAPABILITY: proof/,
+      (error: Error) => {
+        assert.match(error.message, /report was not accepted/i);
+        assert.match(error.message, /capability proof/i);
+        assert.match(error.message, /omit data/i);
+        assert.doesNotMatch(
+          error.message,
+          /CURRENT CAPABILITY:|Output JSON schema:|Required gates:/,
+        );
+        return true;
+      },
     );
     assert.equal((await f.state()).phase.kind, "working");
   } finally {

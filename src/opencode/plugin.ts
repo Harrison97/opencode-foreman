@@ -186,7 +186,7 @@ export const ForemanPlugin: Plugin = async ({ directory, client }) => {
             parts: [
               {
                 type: "text",
-                text: delivery.text + "\n\n" + controller.instructions(latest),
+                text: delivery.text,
                 synthetic: true,
               },
             ],
@@ -475,14 +475,13 @@ export const ForemanPlugin: Plugin = async ({ directory, client }) => {
             await controller.report(context.sessionID, args);
           } catch (error) {
             const state = await controller.get(context.sessionID);
+            const reason =
+              error instanceof Error ? error.message : "Report rejected";
+            const correction = state
+              ? `Correct the report for capability ${state.capability}. Omit data if that capability has no output schema. Read foreman_status for the current workflow instructions.`
+              : "Read foreman_status before retrying; no managed workflow is available.";
             throw new Error(
-              sanitize(
-                (error instanceof Error ? error.message : "Report rejected") +
-                  "\nThe report was not accepted. Correct it for the current capability.\n" +
-                  (state
-                    ? controller.instructions(state)
-                    : "No managed workflow."),
-              ),
+              sanitize(`${reason}\nThe report was not accepted. ${correction}`),
               { cause: error },
             );
           }

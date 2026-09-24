@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { Controller } from "../../src/core/runtime/controller.js";
 import { StateStore } from "../../src/core/persistence/store.js";
 import { JevClient } from "../../src/jev/client.js";
+import { workflowInstructions } from "../../src/core/runtime/instructions.js";
 import {
   fixture,
   sample,
@@ -12,6 +13,28 @@ import {
   advance,
   chooser,
 } from "../support/fixtures.js";
+
+test("gated command outputs are explicitly required to be runnable shell commands", async () => {
+  const w = structuredClone(sample);
+  const draft = w.capabilities.draft!;
+  const properties = draft.outputs!.properties as Record<string, unknown>;
+  properties.commands = properties.checks;
+  delete properties.checks;
+  draft.outputs!.required = ["commands", "labels"];
+  w.capabilities.proof!.gate!.commands = "draft.commands";
+
+  const f = await fixture(w);
+  assert.match(
+    workflowInstructions(await f.state()),
+    /Commands contract: every commands item is a finite, directly runnable shell command/,
+  );
+
+  const noCommandGate = await fixture(sample);
+  assert.doesNotMatch(
+    workflowInstructions(await noCommandGate.state()),
+    /Commands contract:/,
+  );
+});
 
 test("append validates the final snapshot atomically, including artifact paths", async () => {
   const w = structuredClone(sample);
