@@ -27,6 +27,8 @@ const payload = () => ({
 });
 test("highest probability wins below 0.75; ties retain the service choice", async () => {
   assert.equal(parseDecision(payload(), ["a", "b"]).choice, "b");
+  assert.equal(parseDecision(payload(), ["a", "b"]).providerChoice, "a");
+  assert.equal(parseDecision(payload(), ["a", "b"]).confidence, 0.1);
   const tie = payload();
   tie.answers.next.probabilities = { a: 0.5, b: 0.5 };
   assert.equal(parseDecision(tie, ["a", "b"]).choice, "a");
@@ -44,7 +46,7 @@ test("highest probability wins below 0.75; ties retain the service choice", asyn
     }),
   });
   assert.equal((await f.state()).capability, "alternative");
-  assert.equal((await f.state()).history[0]!.confidence, 0.6);
+  assert.equal((await f.state()).history[0]!.confidence, 0.1);
 });
 
 test("five retries after the initial attempt; each attempt is accounted, notices are safe", async () => {
@@ -229,4 +231,55 @@ test("legacy Jev environment key is not used for authentication", async () => {
     if (legacy === undefined) delete process.env.JEV_API_KEY;
     else process.env.JEV_API_KEY = legacy;
   }
+});
+
+test("SDK transport keeps the endpoint, model, redirect protection and in-flight cancellation", async () => {
+  const abort = new AbortController();
+  let started!: () => void;
+  const entered = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  const records: JevUsage[] = [];
+  let calls = 0;
+  const client = new JevClient({
+    key: "fake-key",
+    model: "test-model",
+    onUsage: async (record) => {
+      records.push(record);
+    },
+    fetch: async (url, init) => {
+      calls++;
+      assert.equal(url, "https://api.typesafe.ai/v1/systemone");
+      assert.equal(init!.redirect, "error");
+      assert.equal(
+        new Headers(init!.headers).get("authorization"),
+        "Bearer fake-key",
+      );
+      assert.equal(JSON.parse(init!.body as string).model, "test-model");
+      started();
+      return new Promise((_resolve, reject) => {
+        init!.signal!.addEventListener(
+          "abort",
+          () => reject(new Error("private abort details")),
+          { once: true },
+        );
+      });
+    },
+  });
+  const call = client.choose({}, { a: "A" }, "pick", {
+    sessionID: "s",
+    signal: abort.signal,
+    decisionID: "routing-id",
+  });
+  await entered;
+  abort.abort();
+  await assert.rejects(call);
+  assert.equal(calls, 1);
+  assert.equal(records.at(-1)!.status, "transport_error");
+  assert.equal(records.at(-1)!.decisionID, "routing-id");
+  assert.ok(records.at(-1)!.finishedAt);
+  assert.doesNotMatch(
+    JSON.stringify(records),
+    /fake-key|private abort details/,
+  );
 });

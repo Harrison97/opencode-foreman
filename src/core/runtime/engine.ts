@@ -16,7 +16,13 @@ export interface TransitionContext {
 export type Event =
   | { type: "report"; report: Report; output?: Record<string, unknown> }
   | { type: "idle"; messageID: string; maxTurns?: number }
-  | { type: "decision"; id: string; version: number; answer: Decision }
+  | {
+      type: "decision";
+      id: string;
+      version: number;
+      answer: Decision;
+      diagnosticID?: string;
+    }
   | { type: "decisionFailed"; id: string; version: number; reason: string }
   | { type: "pause"; reason: string }
   | { type: "resume"; guidance?: string; inputMessageID?: string }
@@ -52,6 +58,7 @@ function enter(
   id: string,
   context: TransitionContext,
   decision?: Decision,
+  decisionID?: string,
 ) {
   const previous = state.capability;
   state.history.push({
@@ -61,6 +68,8 @@ function enter(
     source: decision ? "jev" : "guard",
     ...(decision
       ? {
+          decisionID,
+          providerChoice: decision.providerChoice,
           confidence: decision.confidence,
           probabilities: decision.probabilities,
         }
@@ -298,6 +307,8 @@ function onDecision(
       to: state.capability,
       at: context.at,
       source: "jev",
+      decisionID: event.diagnosticID,
+      providerChoice: event.answer.providerChoice,
       confidence: event.answer.confidence,
       probabilities: event.answer.probabilities,
       reason: "Highest-ranked eligible Jev choice",
@@ -306,7 +317,14 @@ function onDecision(
       kind: "working",
       inputMessageID: phase.request.inputMessageID,
     };
-  } else enter(state, event.answer.choice, context, event.answer);
+  } else
+    enter(
+      state,
+      event.answer.choice,
+      context,
+      event.answer,
+      event.diagnosticID,
+    );
 
   return true;
 }

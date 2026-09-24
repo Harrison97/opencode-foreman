@@ -32,5 +32,9 @@ export function highestDecision(answer: Decision, legal: string[]): Decision {
     answer.choice,
   );
 
-  return { ...answer, choice, confidence: p[choice]! };
+  return {
+    ...answer,
+    choice,
+    providerChoice: answer.providerChoice ?? answer.choice,
+  };
 }

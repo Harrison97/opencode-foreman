@@ -55,7 +55,7 @@ test("persists actual model and exact tokens for accepted decisions; counts a re
     requestBody = JSON.parse(init!.body as string);
     return Response.json(response());
   });
-  assert.equal((await f.call()).confidence, 1);
+  assert.equal((await f.call()).confidence, 0.2);
   const records = (await new UsageLog(f.root).read()).records;
   assert.equal(records.length, 2);
   assert.equal(records[0]!.status, "pending");

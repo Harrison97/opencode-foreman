@@ -61,6 +61,43 @@ Environment options:
 - `FOREMAN_MAX_TURNS`: optional positive-integer work-unit cap. Unset or `unlimited`
   means no work-unit limit (the default); not a spending limit.
 
+## Routing diagnostics
+
+Use `/foreman-routing` in OpenCode to inspect the current session's latest 100
+routing calls. Select a decision to see the bounded, redacted state and routing
+instructions actually supplied, eligible options and their criteria, excluded
+capabilities and reasons, and the returned decision. For all recorded calls:
+
+```sh
+npm run routing:trace -- /path/to/project
+npm run routing:trace -- /path/to/project SESSION_ID
+```
+
+The private `.foreman/routing.jsonl` file records pending and finished snapshots
+for each invocation. Readers show the latest snapshot per ID and report damaged
+lines. A pending record may represent a still-running or interrupted request;
+`applied`, `stale`, `cancelled`, and `failed` distinguish what happened to its result.
+BYPASS decisions remain available even after their workflow state is removed.
+Deterministic transitions without a Jev call remain in `/foreman-trace`.
+
+The diagnostic ID joins transition history to `decisionID` in the usage ledger,
+which records individual HTTP attempts. These local diagnostics are never added
+to model prompts or routing context. They can contain project text; the existing
+credential redaction and private `.foreman/` permissions apply. A diagnostic write
+failure emits a warning without changing workflow execution. Viewing diagnostics
+makes no model calls and does not change workflow state.
+
+Jev's original `providerChoice` and `confidence` are preserved separately from
+Foreman's highest-probability `choice`. The selected probability is
+`probabilities[choice]`; confidence is not a substitute for it. Older transition
+records lack `providerChoice` and contain the previous probability-based score;
+the trace labels that value as a legacy score rather than a Jev confidence.
+
+Transport uses the official `@typesafe-ai/sdk` client, pinned in the lockfile.
+SDK retries and logging are disabled: Foreman retains its accounted retry policy,
+response validation, cancellation, and error redaction. Raw response access keeps
+reported token usage available even when the decision itself is malformed.
+
 ## Version 0.4 migration
 
 Current workflows no longer support `fallback` fields or a confidence threshold.
@@ -80,7 +117,7 @@ OpenCode shows retry notices, a first-success **Jev connected** toast, and the
 reason when supervision pauses. API failure during admission pauses rather than
 silently bypassing supervision. Every HTTP attempt has its own usage record,
 linked by decision ID and attempt number; successful records include the choice,
-score, and probability distribution. Unknown token usage remains unknown.
+provider choice, reported confidence, and probability distribution. Unknown token usage remains unknown.
 
 Version 0.4 stores explicit runtime phases in schema-3 state. Supported schema-2
 runs with producer snapshots migrate automatically on the next write; the

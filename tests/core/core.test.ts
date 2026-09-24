@@ -357,7 +357,7 @@ test("Jev parser validates confidence, probabilities and legal choices", () => {
   };
   assert.equal(
     parseDecision({ answers: { next: answer } }, ["draft", "proof"]).confidence,
-    0.99,
+    0.2,
   );
   for (const invalid of [
     { ...answer, choice: "other" },

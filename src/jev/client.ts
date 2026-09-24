@@ -1,3 +1,8 @@
+import {
+  APIError,
+  TypeSafeClient,
+  type SystemOneRequest,
+} from "@typesafe-ai/sdk";
 import type { Chooser, Decision } from "../core/types.js";
 import { DecisionError, highestDecision } from "../core/runtime/decision.js";
 import { sanitize } from "../core/security.js";
@@ -59,7 +64,7 @@ export class JevClient implements Chooser {
     state: unknown,
     criteria: Record<string, string>,
     instructions: string,
-    context?: { sessionID: string; signal?: AbortSignal },
+    context?: { sessionID: string; signal?: AbortSignal; decisionID?: string },
   ): Promise<Decision> {
     context?.signal?.throwIfAborted();
     const key = this.options.key ?? process.env.TYPESAFE_API_KEY;
@@ -84,7 +89,17 @@ export class JevClient implements Chooser {
         "Jev decision context exceeds budget. Reduce the workflow context before resuming.",
       );
 
-    const decisionID = randomUUID();
+    const client = new TypeSafeClient({
+      apiKey: key,
+      baseURL: "https://api.typesafe.ai",
+      timeout: this.options.timeoutMs ?? 12_000,
+      retry: { maxRetries: 0 }, // Foreman accounts for and controls every attempt.
+      logLevel: "off", // SDK debug logging may include request/response bodies.
+      fetch: (url, init) =>
+        (this.options.fetch ?? fetch)(url, { ...init, redirect: "error" }),
+    });
+    const request = JSON.parse(body) as SystemOneRequest;
+    const decisionID = context?.decisionID ?? randomUUID();
 
     for (let attempt = 1; attempt <= 6; attempt++) {
       context?.signal?.throwIfAborted();
@@ -119,68 +134,47 @@ export class JevClient implements Chooser {
       let delay = Math.min(1000 * 2 ** (attempt - 1), 16000);
 
       try {
-        const response = await (this.options.fetch ?? fetch)(
-          "https://api.typesafe.ai/v1/systemone",
-          {
-            method: "POST",
-            headers: {
-              authorization: `Bearer ${key}`,
-              "content-type": "application/json",
-            },
-            body,
-            signal: context?.signal
-              ? AbortSignal.any([
-                  context.signal,
-                  AbortSignal.timeout(this.options.timeoutMs ?? 12_000),
-                ])
-              : AbortSignal.timeout(this.options.timeoutMs ?? 12_000),
-            redirect: "error",
-          },
-        );
+        // Keep raw response access so malformed decisions still retain billed usage.
+        const response = await client
+          .systemOne(request, { signal: context?.signal })
+          .asResponse();
         usage.httpStatus = response.status;
-
-        if (!response.ok) {
+        usage.status = "invalid_response";
+        const payload = await response.json();
+        usage.model = typeof payload?.model === "string" ? payload.model : null;
+        usage.inputTokens = tokenCount(payload?.usage?.input_tokens);
+        usage.outputTokens = tokenCount(payload?.usage?.output_tokens);
+        result = parseDecision(payload, Object.keys(criteria));
+        usage.status = "success";
+        usage.choice = result.choice;
+        usage.providerChoice = result.providerChoice;
+        usage.confidence = result.confidence;
+        usage.probabilities = result.probabilities;
+      } catch (error) {
+        if (error instanceof APIError) {
+          const status = error.status;
+          usage.httpStatus = status;
           usage.status = "http_error";
-          retry =
-            [408, 429].includes(response.status) || response.status >= 500;
-          failure = [401, 403].includes(response.status)
-            ? `Jev authentication rejected (HTTP ${response.status}). Check your API key and access`
-            : `Jev HTTP ${response.status}`;
-          const header = response.headers.get("retry-after");
-
+          retry = [408, 429].includes(status) || status >= 500;
+          failure = [401, 403].includes(status)
+            ? `Jev authentication rejected (HTTP ${status}). Check your API key and access`
+            : `Jev HTTP ${status}`;
+          const header = error.headers.get("retry-after");
           if (header && retry) {
             const ms = /^\d+(\.\d+)?$/.test(header)
               ? Number(header) * 1000
               : Date.parse(header) - Date.now();
-
             if (Number.isFinite(ms)) delay = Math.max(delay, ms);
-
             if (delay > 30000) {
               retry = false;
               failure +=
                 ". Server requested a retry delay longer than 30 seconds; wait before resuming";
             }
           }
-
-          await response.body?.cancel().catch(() => {});
-        } else {
-          usage.status = "invalid_response";
-          const payload = await response.json();
-          usage.model =
-            typeof payload?.model === "string" ? payload.model : null;
-          usage.inputTokens = tokenCount(payload?.usage?.input_tokens);
-          usage.outputTokens = tokenCount(payload?.usage?.output_tokens);
-          result = parseDecision(payload, Object.keys(criteria));
-          usage.status = "success";
-          usage.choice = result.choice;
-          usage.confidence = result.confidence;
-          usage.probabilities = result.probabilities;
-        }
-      } catch {
-        if (usage.status === "pending") usage.status = "transport_error";
+        } else if (usage.status === "pending") usage.status = "transport_error";
         else if (usage.status === "invalid_response")
           failure = "Invalid Jev response";
-        // No provider bodies, request objects, or arbitrary errors reach logs or state.
+        // No SDK error bodies, request objects, or arbitrary errors reach logs or state.
       }
 
       usage.finishedAt = new Date().toISOString();

@@ -4,6 +4,7 @@ export interface ModelRef {
 }
 
 export interface Decision {
+  providerChoice?: string;
   choice: string;
   confidence: number;
   probabilities: Record<string, number>;
@@ -15,7 +16,7 @@ export interface Chooser {
     state: unknown,
     criteria: Record<string, string>,
     instructions: string,
-    context?: { sessionID: string; signal?: AbortSignal },
+    context?: { sessionID: string; signal?: AbortSignal; decisionID?: string },
   ): Promise<Decision>;
 }
 
@@ -67,6 +68,8 @@ export interface Evidence {
 }
 
 export interface Transition {
+  decisionID?: string;
+  providerChoice?: string;
   from: string | null;
   to: string;
   at: string;

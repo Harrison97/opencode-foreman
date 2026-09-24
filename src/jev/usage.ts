@@ -14,6 +14,7 @@ export interface JevUsage {
   decisionID?: string;
   attempt?: number;
   choice?: string;
+  providerChoice?: string;
   confidence?: number;
   probabilities?: Record<string, number>;
   sessionID: string | null;

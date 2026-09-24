@@ -20,6 +20,7 @@ import { resolvedOutput } from "./output.js";
 import { validateReport, validateReportOutput } from "./report.js";
 import { outputReference } from "../workflow/references.js";
 import { decisionContext, decisionPrompt } from "./context.js";
+import { appendRoutingDiagnostic, routingDiagnostic } from "./diagnostics.js";
 import { workflowInstructions } from "./instructions.js";
 import {
   applyWorkflowEvent,
@@ -187,33 +188,57 @@ export class Controller {
       request,
     );
 
+    const diagnostic = routingDiagnostic(snapshot, {
+      state: sanitize(decisionContext(snapshot)),
+      criteria,
+      instructions,
+    });
+    const persistDiagnostic = () =>
+      appendRoutingDiagnostic(this.store.dir, diagnostic).catch(() => {
+        console.warn("Foreman: could not write local routing diagnostics");
+      });
+    await persistDiagnostic();
     try {
       const answer = highestDecision(
         await this.chooser.choose(
-          sanitize(decisionContext(snapshot)),
-          criteria,
-          instructions,
-          { sessionID, signal: abort.signal },
+          diagnostic.input.state,
+          diagnostic.input.criteria,
+          diagnostic.input.instructions,
+          { sessionID, signal: abort.signal, decisionID: diagnostic.id },
         ),
         request.choices,
       );
 
-      if (abort.signal.aborted) return this.get(sessionID);
-
-      return await this.commitEvent(sessionID, {
+      diagnostic.answer = answer;
+      if (abort.signal.aborted) {
+        diagnostic.status = "cancelled";
+        return this.get(sessionID);
+      }
+      const result = await this.commitEvent(sessionID, {
         type: "decision",
         id: request.id,
         version: snapshot.version,
         answer,
+        diagnosticID: diagnostic.id,
       });
+      diagnostic.status =
+        result?.status === "bypassed" ||
+        result?.history.some((step) => step.decisionID === diagnostic.id)
+          ? "applied"
+          : "stale";
+      return result;
     } catch (error) {
-      if (abort.signal.aborted) return this.get(sessionID);
-
+      if (abort.signal.aborted) {
+        diagnostic.status = "cancelled";
+        return this.get(sessionID);
+      }
+      diagnostic.status = "failed";
       const reason =
         error instanceof DecisionError
           ? error.message
           : "Jev decision failed. Check connectivity and credentials, then send foreman resume.";
 
+      diagnostic.error = reason;
       return await this.commitEvent(sessionID, {
         type: "decisionFailed",
         id: request.id,
@@ -221,6 +246,8 @@ export class Controller {
         reason,
       });
     } finally {
+      diagnostic.finishedAt = new Date().toISOString();
+      await persistDiagnostic();
       if (this.decisions.get(snapshot.id) === abort)
         this.decisions.delete(snapshot.id);
 

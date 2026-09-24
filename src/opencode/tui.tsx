@@ -1,6 +1,11 @@
 /** @jsxImportSource @opentui/solid */
 import type { TuiPlugin, TuiPluginModule } from "@opencode-ai/plugin/tui";
 import { createSignal, For, Show } from "solid-js";
+import { join } from "node:path";
+import {
+  readRoutingDiagnostics,
+  routingDiagnosticText,
+} from "../core/runtime/diagnostics.js";
 import { readTrace, recentSteps, type TraceView } from "./trace.js";
 
 const tui: TuiPlugin = async (api) => {
@@ -105,7 +110,7 @@ const tui: TuiPlugin = async (api) => {
                 </For>
               </box>
               <text fg={api.theme.current.textMuted}>
-                /foreman-trace · full history
+                /foreman-trace · history /foreman-routing · decisions
               </text>
             </box>
           )}
@@ -138,7 +143,7 @@ const tui: TuiPlugin = async (api) => {
                 title: `${index + 1}. ${step.from ?? "start"} → ${step.to}`,
                 value: index,
                 description: step.at,
-                footer: `${step.source}${step.confidence === undefined ? "" : ` · ${Math.round(step.confidence * 100)}%`}`,
+                footer: `${step.source}${step.confidence === undefined ? "" : ` · ${step.providerChoice ? "Jev confidence" : "legacy score"} ${Math.round(step.confidence * 100)}%`}`,
                 onSelect: () =>
                   api.ui.dialog.replace(() => (
                     <api.ui.DialogAlert
@@ -149,6 +154,69 @@ const tui: TuiPlugin = async (api) => {
               }))}
             />
           ));
+        },
+      },
+      {
+        name: "foreman.routing",
+        title: "Foreman: routing diagnostics",
+        category: "Foreman",
+        namespace: "palette",
+        slashName: "foreman-routing",
+        async run() {
+          const id = session();
+          const directory = id && api.state.session.get(id)?.directory;
+          if (!id || !directory) return;
+          try {
+            const { records, unreadableLines } = await readRoutingDiagnostics(
+              join(directory, ".foreman"),
+              id,
+            );
+            if (session() !== id) return;
+            if (unreadableLines)
+              api.ui.toast({
+                variant: "warning",
+                message: `${unreadableLines} unreadable routing diagnostic records`,
+              });
+            if (!records.length) {
+              api.ui.toast({
+                variant: "info",
+                message: "No routing diagnostics recorded for this session",
+              });
+              return;
+            }
+            api.ui.dialog.replace(() => (
+              <api.ui.DialogSelect
+                title="Foreman routing · select a decision"
+                options={records
+                  .slice(-100)
+                  .reverse()
+                  .map((record) => ({
+                    title:
+                      `${record.from ?? "admission"} → ${record.answer?.choice ?? "pending/no answer"}`.replace(
+                        /\p{Cc}/gu,
+                        " ",
+                      ),
+                    value: record.id,
+                    description: `${record.startedAt} · ${record.status}`,
+                    footer: record.answer
+                      ? `Jev confidence ${Math.round(record.answer.confidence * 100)}% · selected probability ${Math.round(record.answer.probabilities[record.answer.choice]! * 100)}%`
+                      : record.status,
+                    onSelect: () =>
+                      api.ui.dialog.replace(() => (
+                        <api.ui.DialogAlert
+                          title="Routing input and result"
+                          message={routingDiagnosticText(record)}
+                        />
+                      )),
+                  }))}
+              />
+            ));
+          } catch {
+            api.ui.toast({
+              variant: "warning",
+              message: "Could not read local routing diagnostics",
+            });
+          }
         },
       },
     ],

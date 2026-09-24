@@ -68,6 +68,7 @@ In OpenCode chat:
 - `stop`, `pause`, or `cancel` pauses a run; a normal reply resumes it.
 - `foreman resume` can attach the latest paused run to a new conversation.
 - `/foreman-trace` opens the capability history in the terminal UI.
+- `/foreman-routing` shows routing inputs, excluded stages, probabilities, and outcomes.
 
 These are chat messages/UI commands, not shell commands. The agent uses
 `foreman_status` to inspect its assignment and `foreman_report` to report outcomes.

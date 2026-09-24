@@ -6,6 +6,7 @@ import { Controller } from "../../src/core/runtime/controller.js";
 import { StateStore } from "../../src/core/persistence/store.js";
 import { JevClient } from "../../src/jev/client.js";
 import { workflowInstructions } from "../../src/core/runtime/instructions.js";
+import { readRoutingDiagnostics } from "../../src/core/runtime/diagnostics.js";
 import {
   fixture,
   sample,
@@ -142,6 +143,10 @@ test("pause is immediate during a slow choice and its late result cannot advance
   );
   const pending = c.gate("s", "done");
   await entered;
+  assert.equal(
+    (await readRoutingDiagnostics(f.store.dir, "s")).records.at(-1)!.status,
+    "pending",
+  );
   const pause = c.pause("s", "User stopped");
   try {
     await Promise.race([
@@ -155,6 +160,10 @@ test("pause is immediate during a slow choice and its late result cannot advance
   }
   await pending;
   assert.equal(signal?.aborted, true);
+  assert.equal(
+    (await readRoutingDiagnostics(f.store.dir, "s")).records.at(-1)!.status,
+    "cancelled",
+  );
   assert.equal((await f.state()).status, "paused");
   assert.equal((await f.state()).capability, "draft");
   assert.equal((await f.state()).history.length, 1);
@@ -194,6 +203,10 @@ test("a separate controller can change guidance while a decision runs; stale res
   assert.equal(state?.capability, "draft");
   assert.match(state!.guidance.at(-1)!, /PostgreSQL/);
   assert.equal(state?.report, undefined);
+  assert.equal(
+    (await readRoutingDiagnostics(f.store.dir, "s")).records.at(-1)!.status,
+    "stale",
+  );
 });
 
 test("guidance after failed admission is included when Jev retries", async () => {

@@ -15,6 +15,7 @@
     "check": "npm run lint && npm run format:check && npm run typecheck && npm test",
     "install:local": "npm run build && node scripts/install.mjs",
     "usage:jev": "tsx scripts/cli/jev-usage.ts",
+    "routing:trace": "tsx scripts/cli/routing-trace.ts",
     "workflow:check": "tsx scripts/cli/check-workflow.ts",
     "smoke:jev": "tsx scripts/smoke/smoke-jev.ts",
     "smoke:opencode": "tsx scripts/smoke/smoke-opencode.ts",
@@ -26,6 +27,7 @@
   },
   "dependencies": {
     "@opencode-ai/plugin": "1.18.30",
+    "@typesafe-ai/sdk": "0.6.0",
     "ajv": "^8.20.0",
     "yaml": "^2.9.1"
   },
