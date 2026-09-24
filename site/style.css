@@ -477,9 +477,6 @@ footer > a:last-child {
     gap: 17px;
     font-size: 12px;
   }
-  nav > a:first-child {
-    display: none;
-  }
   .nav-github {
     padding-left: 17px;
   }
